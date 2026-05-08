@@ -108,7 +108,7 @@ export default function ExtensionsPageClient() {
         </div>
 
         {loading && (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
             {[...Array(6)].map((_, index) => (
               <div key={index} className="h-96 bg-muted rounded-xl animate-pulse" />
             ))}
@@ -118,7 +118,7 @@ export default function ExtensionsPageClient() {
         {!loading && (
           <>
             {filteredProducts.length > 0 ? (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
                 {filteredProducts.map((product) => (
                   <div key={product.id} onClick={() => handleProductClick(product)}>
                     <ProductCard product={product} />
