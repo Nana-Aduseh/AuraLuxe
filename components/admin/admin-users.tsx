@@ -1,0 +1,331 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { dedupeProfilesById, type AdminManagedProfile } from '@/lib/profile'
+import { formatPrice } from '@/lib/currency'
+import { createClient } from '@/lib/supabase/client'
+
+interface AdminUsersResponse {
+  currentUserId: string
+  users: AdminManagedProfile[]
+}
+
+interface UserOrder {
+  id: string
+  total_amount: number
+  status: string
+  created_at: string
+}
+
+function getLoadUsersErrorMessage(error: unknown) {
+  if (error instanceof TypeError && error.message === 'Failed to fetch') {
+    return 'Unable to reach the admin users API. Restart the dev server, then rerun supabase-product-admin-setup.sql in Supabase if it still fails.'
+  }
+
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  return 'Unable to load users'
+}
+
+export default function AdminUsers() {
+  const supabase = createClient()
+  const [users, setUsers] = useState<AdminManagedProfile[]>([])
+  const [currentUserId, setCurrentUserId] = useState<string>('')
+  const [loading, setLoading] = useState(true)
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
+  const [userOrders, setUserOrders] = useState<Map<string, UserOrder[]>>(new Map())
+  const [loadingOrders, setLoadingOrders] = useState<Set<string>>(new Set())
+
+  const loadUsers = async () => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/admin/users', {
+        method: 'GET',
+        cache: 'no-store',
+      })
+
+      const payload = await response.json()
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to load users')
+      }
+
+      const data = payload as AdminUsersResponse
+      setUsers(dedupeProfilesById(data.users))
+      setCurrentUserId(data.currentUserId)
+    } catch (loadError) {
+      setError(getLoadUsersErrorMessage(loadError))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadUsers()
+  }, [])
+
+  const filteredUsers = useMemo(() => {
+    const query = search.trim().toLowerCase()
+
+    if (!query) {
+      return users
+    }
+
+    return users.filter((user) => {
+      const haystack = [user.name, user.email, user.phone, user.id]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+
+      return haystack.includes(query)
+    })
+  }, [search, users])
+
+  const handleToggleAdmin = async (user: AdminManagedProfile) => {
+    setSavingId(user.id)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/admin/users/${user.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          isAdmin: !user.is_admin,
+        }),
+      })
+
+      const payload = await response.json()
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to update admin access')
+      }
+
+      setUsers((currentUsers) =>
+        currentUsers.map((currentUser) =>
+          currentUser.id === user.id
+            ? { ...currentUser, is_admin: !user.is_admin }
+            : currentUser
+        )
+      )
+    } catch (updateError) {
+      setError(
+        updateError instanceof Error
+          ? updateError.message
+          : 'Unable to update admin access'
+      )
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  const loadUserOrders = async (userId: string) => {
+    if (userOrders.has(userId)) {
+      return
+    }
+
+    setLoadingOrders((prev) => new Set(prev).add(userId))
+
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id, total_amount, status, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+
+      if (!error && data) {
+        setUserOrders((prev) => new Map(prev).set(userId, data as UserOrder[]))
+      }
+    } catch (err) {
+      console.error('Error loading orders:', err)
+    } finally {
+      setLoadingOrders((prev) => {
+        const next = new Set(prev)
+        next.delete(userId)
+        return next
+      })
+    }
+  }
+
+  const handleExpandUser = (userId: string) => {
+    if (expandedUserId === userId) {
+      setExpandedUserId(null)
+    } else {
+      setExpandedUserId(userId)
+      loadUserOrders(userId)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Users</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Manage users and view their order history
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, email, phone, or ID"
+            className="w-full md:w-80"
+          />
+          <Button onClick={loadUsers} variant="outline">
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {filteredUsers.map((user) => {
+          const isCurrentUser = user.id === currentUserId
+          const orders = userOrders.get(user.id) || []
+          const isLoading = loadingOrders.has(user.id)
+
+          return (
+            <div
+              key={user.id}
+              className="bg-white rounded-lg border border-gray-200 overflow-hidden"
+            >
+              <div
+                className="px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-gray-50"
+                onClick={() => handleExpandUser(user.id)}
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-gray-900">
+                          {user.name || 'Unnamed user'}
+                        </p>
+                        {isCurrentUser && (
+                          <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded">
+                            You
+                          </span>
+                        )}
+                        {user.is_admin && (
+                          <span className="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded">
+                            Admin
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600">{user.email || 'No email'}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleToggleAdmin(user)
+                    }}
+                    disabled={savingId === user.id || isCurrentUser}
+                    variant={user.is_admin ? 'outline' : 'default'}
+                    size="sm"
+                    className={
+                      user.is_admin
+                        ? ''
+                        : 'bg-amber-600 hover:bg-amber-700 text-white'
+                    }
+                  >
+                    {savingId === user.id
+                      ? 'Saving...'
+                      : user.is_admin
+                        ? 'Remove Admin'
+                        : 'Make Admin'}
+                  </Button>
+                  <span className="text-gray-400 text-lg">
+                    {expandedUserId === user.id ? '▼' : '▶'}
+                  </span>
+                </div>
+              </div>
+
+              {expandedUserId === user.id && (
+                <div className="border-t border-gray-200 px-6 py-4 bg-gray-50">
+                  <h4 className="font-semibold text-gray-900 mb-3">Order History</h4>
+                  {isLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600"></div>
+                    </div>
+                  ) : orders.length === 0 ? (
+                    <p className="text-sm text-gray-600">No orders yet</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {orders.map((order) => (
+                        <div
+                          key={order.id}
+                          className="flex items-center justify-between p-3 bg-white rounded border border-gray-200 text-sm"
+                        >
+                          <div>
+                            <p className="font-mono text-gray-900">
+                              {order.id.slice(0, 8).toUpperCase()}
+                            </p>
+                            <p className="text-gray-600 text-xs">
+                              {new Date(order.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold text-amber-600">
+                              {formatPrice(order.total_amount)}
+                            </p>
+                            <span
+                              className={`text-xs px-2 py-1 rounded ${
+                                order.status === 'completed'
+                                  ? 'bg-green-100 text-green-700'
+                                  : order.status === 'processing'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-yellow-100 text-yellow-700'
+                              }`}
+                            >
+                              {order.status}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {!error && filteredUsers.length === 0 && (
+          <div className="bg-white rounded-lg border border-gray-200 px-6 py-12 text-center">
+            <p className="text-gray-500">
+              {users.length === 0
+                ? 'No synced users yet. Once someone signs in, they will appear here.'
+                : 'No users match your search.'}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
