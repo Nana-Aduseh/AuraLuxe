@@ -1,0 +1,10 @@
+{
+  "buildCommand": "pnpm install && pnpm run build",
+  "devCommand": "pnpm dev",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "framework": "nextjs",
+  "nodeVersion": "20.x",
+  "env": {
+    "npm_config_legacy_peer_deps": "true"
+  }
+}
