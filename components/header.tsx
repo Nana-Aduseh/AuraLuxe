@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { ShoppingCart, LogOut, Menu, X } from 'lucide-react'
+import { ShoppingCart, LogOut, Menu, X, ArrowLeft } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 
 interface HeaderProps {
   onSearch?: (query: string) => void
@@ -18,8 +19,11 @@ export default function Header({ onSearch }: HeaderProps) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
+  const isHomePage = pathname === '/'
 
   useEffect(() => {
     const getUser = async () => {
@@ -130,6 +134,16 @@ export default function Header({ onSearch }: HeaderProps) {
     setIsAdmin(false)
     setCartCount(0)
     router.push('/')
+    window.location.reload()
+  }
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (searchQuery.trim()) {
+      router.push(`/extensions?search=${encodeURIComponent(searchQuery)}`)
+      setMobileMenuOpen(false)
+      setSearchQuery('')
+    }
   }
 
   return (
@@ -139,7 +153,7 @@ export default function Header({ onSearch }: HeaderProps) {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 flex-shrink-0">
             <img src="/aura-luxe-logo.png" alt="Aura Luxe" className="h-16 w-auto" />
-            <span className="font-semibold text-foreground hidden sm:block text-sm md:text-base">Aura Luxe</span>
+            <span className="font-semibold text-foreground text-xs sm:text-sm md:text-base">Aura Luxe</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -211,15 +225,35 @@ export default function Header({ onSearch }: HeaderProps) {
               )}
             </div>
 
-            {/* Mobile Menu Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </Button>
+            {/* Mobile Menu Button / Back Button */}
+            {isHomePage ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              >
+                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2 md:hidden">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => router.push('/')}
+                  title="Back to Home"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                >
+                  {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 

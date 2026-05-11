@@ -10,15 +10,29 @@ interface CarouselProps {
   products: Product[]
   title: string
   onProductClick: (product: Product) => void
+  onTitleClick?: () => void
 }
 
 export default function Carousel({
   products,
   title,
   onProductClick,
+  onTitleClick,
 }: CarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [autoPlay, setAutoPlay] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
+  const [isTablet, setIsTablet] = useState(false)
+
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 640) // Mobile: < 640px (before sm)
+      setIsTablet(window.innerWidth >= 640 && window.innerWidth < 1024) // Tablet: 640-1024px (sm to lg)
+    }
+    checkScreenSize()
+    window.addEventListener('resize', checkScreenSize)
+    return () => window.removeEventListener('resize', checkScreenSize)
+  }, [])
 
   useEffect(() => {
     if (!autoPlay) return
@@ -44,17 +58,28 @@ export default function Carousel({
 
   if (products.length === 0) return null
 
-  const visibleProducts = [
-    products[currentIndex],
-    products[(currentIndex + 1) % products.length],
-    products[(currentIndex + 2) % products.length],
-  ]
+  // Match grid columns: 2 on mobile, 2 on tablet, 3 on desktop
+  let itemsToShow = 3 // default for large screens
+  if (isMobile) {
+    itemsToShow = 2
+  } else if (isTablet) {
+    itemsToShow = 2
+  }
+  
+  const visibleProducts = Array.from({ length: itemsToShow }, (_, i) =>
+    products[(currentIndex + i) % products.length]
+  )
 
   return (
     <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-primary/5 via-background to-accent/5 border-y border-border/30">
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-10">
-          <h2 className="text-3xl md:text-4xl font-bold text-foreground">{title}</h2>
+          <h2 
+            className={`text-3xl md:text-4xl font-bold text-foreground ${onTitleClick ? 'cursor-pointer hover:text-primary transition-colors' : ''}`}
+            onClick={onTitleClick}
+          >
+            {title}
+          </h2>
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -77,7 +102,7 @@ export default function Carousel({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
           {visibleProducts.map((product, index) => (
             <div
               key={`${product.id}-${index}`}
