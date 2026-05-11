@@ -18,35 +18,35 @@ export default function Footer() {
               alt="Aura Luxe"
               width={800}
               height={320}
-              className="h-32 w-auto"
+              className="h-16 w-auto"
               priority
             />
-            <p className="text-primary-foreground/80 text-xs">
+            <p className="text-primary-foreground/80 text-xs leading-tight">
               Premium quality hair extensions for the modern woman.
             </p>
           </div>
 
           {/* Quick Links */}
-          <div className="md:flex-1 md:text-center md:mb-0">
-            <h4 className="font-semibold text-primary-foreground mb-1">Quick Links</h4>
-            <ul className="space-y-0.5">
+          <div className="md:flex-1 md:text-center md:mb-0 hidden sm:block">
+            <h4 className="font-semibold text-primary-foreground mb-0.5 text-xs">Quick Links</h4>
+            <ul className="space-y-0">
               <li>
-                <Link href="/extensions" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors text-sm">
+                <Link href="/extensions" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors text-xs">
                   Shop Extensions
                 </Link>
               </li>
               <li>
-                <Link href="/about" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors text-sm">
+                <Link href="/about" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors text-xs">
                   About Us
                 </Link>
               </li>
               <li>
-                <Link href="/cart" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors text-sm">
+                <Link href="/cart" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors text-xs">
                   My Cart
                 </Link>
               </li>
               <li>
-                <Link href="/auth/login" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors text-sm">
+                <Link href="/auth/login" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors text-xs">
                   Sign In
                 </Link>
               </li>
@@ -54,23 +54,23 @@ export default function Footer() {
           </div>
 
           {/* Contact */}
-          <div className="md:flex-1 md:text-center md:mb-0">
-            <h4 className="font-semibold text-primary-foreground mb-1">Get In Touch</h4>
-            <ul className="space-y-0.5">
+          <div className="md:flex-1 md:text-center md:mb-0 hidden sm:block">
+            <h4 className="font-semibold text-primary-foreground mb-0.5 text-xs">Get In Touch</h4>
+            <ul className="space-y-0">
               <li className="flex items-center gap-1">
-                <Phone size={16} className="text-primary-foreground flex-shrink-0" />
-                <a href="tel:0542426135" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors text-sm">
+                <Phone size={12} className="text-primary-foreground flex-shrink-0" />
+                <a href="tel:0542426135" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors text-xs">
                   0542426135
                 </a>
               </li>
               <li className="flex items-start gap-1">
-                <MapPin size={16} className="text-primary-foreground flex-shrink-0 mt-0" />
-                <span className="text-primary-foreground/80 text-sm">
+                <MapPin size={12} className="text-primary-foreground flex-shrink-0 mt-0" />
+                <span className="text-primary-foreground/80 text-xs">
                   Accra, Ghana
                 </span>
               </li>
-              <li className="flex items-center gap-1">
-                <span className="text-primary-foreground text-sm font-medium">TikTok:</span>
+              <li className="flex items-center gap-1 hidden">
+                <span className="text-primary-foreground text-xs font-medium">TikTok:</span>
                 <a
                   href="https://tiktok.com/@auraluxeextensions"
                   target="_blank"
