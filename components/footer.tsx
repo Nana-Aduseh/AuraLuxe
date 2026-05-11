@@ -10,9 +10,9 @@ export default function Footer() {
   return (
     <footer className="border-t border-border/30 bg-primary text-primary-foreground mt-20">
       <div className="max-w-7xl mx-auto px-6 pt-0 pb-2">
-        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-8 mb-4">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-8 mb-4">
           {/* Brand */}
-          <div className="space-y-4 md:flex-shrink-0 md:mr-auto">
+          <div className="space-y-4 md:flex-shrink-0 md:mr-auto md:mb-0">
             <Image
               src="/aura-luxe-logo.png"
               alt="Aura Luxe"
@@ -27,7 +27,7 @@ export default function Footer() {
           </div>
 
           {/* Quick Links */}
-          <div className="md:flex-1 md:text-center">
+          <div className="md:flex-1 md:text-center md:mb-0">
             <h4 className="font-semibold text-primary-foreground mb-4">Quick Links</h4>
             <ul className="space-y-2">
               <li>
@@ -54,7 +54,7 @@ export default function Footer() {
           </div>
 
           {/* Contact */}
-          <div className="md:flex-1 md:text-center">
+          <div className="md:flex-1 md:text-center md:mb-0">
             <h4 className="font-semibold text-primary-foreground mb-4">Get In Touch</h4>
             <ul className="space-y-3">
               <li className="flex items-center gap-2">
