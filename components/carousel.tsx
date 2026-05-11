@@ -58,11 +58,9 @@ export default function Carousel({
 
   if (products.length === 0) return null
 
-  // Match grid columns: 2 on mobile, 2 on tablet, 3 on desktop
+  // Match grid columns: 2 on mobile, 3 on tablet and desktop
   let itemsToShow = 3 // default for large screens
   if (isMobile) {
-    itemsToShow = 2
-  } else if (isTablet) {
     itemsToShow = 2
   }
   

@@ -9,8 +9,8 @@ export default function Footer() {
 
   return (
     <footer className="border-t border-border/30 bg-primary text-primary-foreground mt-20">
-      <div className="max-w-7xl mx-auto px-6 pt-4 pb-4">
-        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-12 mb-12">
+      <div className="max-w-7xl mx-auto px-6 pt-8 pb-2">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-8 mb-6">
           {/* Brand */}
           <div className="space-y-4 md:flex-shrink-0 md:mr-auto">
             <Image
@@ -85,9 +85,9 @@ export default function Footer() {
         </div>
 
         {/* Divider */}
-        <div className="border-t border-primary-foreground/20 pt-8">
+        <div className="border-t border-primary-foreground/20 pt-4 pb-2">
           <div className="flex justify-center items-center">
-            <p className="text-primary-foreground/60 text-sm">
+            <p className="text-primary-foreground/60 text-xs">
               © {currentYear} Aura Luxe Extensions. All rights reserved.
             </p>
           </div>
