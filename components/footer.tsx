@@ -9,27 +9,27 @@ export default function Footer() {
 
   return (
     <footer className="border-t border-border/30 bg-primary text-primary-foreground mt-20">
-      <div className="max-w-7xl mx-auto px-6 pt-0 pb-2">
-        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-8 mb-4">
+      <div className="max-w-7xl mx-auto px-6 pt-0 pb-0">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-1 mb-0">
           {/* Brand */}
-          <div className="space-y-4 md:flex-shrink-0 md:mr-auto md:mb-0">
+          <div className="space-y-0.5 md:flex-shrink-0 md:mr-auto md:mb-0">
             <Image
               src="/aura-luxe-logo.png"
               alt="Aura Luxe"
               width={800}
               height={320}
-              className="h-60 w-auto"
+              className="h-32 w-auto"
               priority
             />
-            <p className="text-primary-foreground/80 text-sm">
+            <p className="text-primary-foreground/80 text-xs">
               Premium quality hair extensions for the modern woman.
             </p>
           </div>
 
           {/* Quick Links */}
           <div className="md:flex-1 md:text-center md:mb-0">
-            <h4 className="font-semibold text-primary-foreground mb-4">Quick Links</h4>
-            <ul className="space-y-2">
+            <h4 className="font-semibold text-primary-foreground mb-1">Quick Links</h4>
+            <ul className="space-y-0.5">
               <li>
                 <Link href="/extensions" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors text-sm">
                   Shop Extensions
@@ -55,21 +55,21 @@ export default function Footer() {
 
           {/* Contact */}
           <div className="md:flex-1 md:text-center md:mb-0">
-            <h4 className="font-semibold text-primary-foreground mb-4">Get In Touch</h4>
-            <ul className="space-y-3">
-              <li className="flex items-center gap-2">
+            <h4 className="font-semibold text-primary-foreground mb-1">Get In Touch</h4>
+            <ul className="space-y-0.5">
+              <li className="flex items-center gap-1">
                 <Phone size={16} className="text-primary-foreground flex-shrink-0" />
                 <a href="tel:0542426135" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors text-sm">
                   0542426135
                 </a>
               </li>
-              <li className="flex items-start gap-2">
-                <MapPin size={16} className="text-primary-foreground flex-shrink-0 mt-0.5" />
+              <li className="flex items-start gap-1">
+                <MapPin size={16} className="text-primary-foreground flex-shrink-0 mt-0" />
                 <span className="text-primary-foreground/80 text-sm">
                   Accra, Ghana
                 </span>
               </li>
-              <li className="flex items-center gap-2">
+              <li className="flex items-center gap-1">
                 <span className="text-primary-foreground text-sm font-medium">TikTok:</span>
                 <a
                   href="https://tiktok.com/@auraluxeextensions"
@@ -85,7 +85,7 @@ export default function Footer() {
         </div>
 
         {/* Divider */}
-        <div className="border-t border-primary-foreground/20 pt-4 pb-2">
+        <div className="border-t border-primary-foreground/20 pt-0.5 pb-0">
           <div className="flex justify-center items-center">
             <p className="text-primary-foreground/60 text-xs">
               © {currentYear} Aura Luxe Extensions. All rights reserved.
