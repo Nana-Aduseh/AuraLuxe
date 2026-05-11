@@ -71,6 +71,7 @@ export async function getTrendingProducts() {
     .from('products')
     .select('*')
     .eq('is_trending', true)
+    .eq('is_newest', false)
     .limit(5)
 
   if (error) {
