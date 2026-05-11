@@ -9,10 +9,10 @@ export default function Footer() {
 
   return (
     <footer className="border-t border-border/30 bg-primary text-primary-foreground mt-20">
-      <div className="max-w-7xl mx-auto px-6 pt-4 pb-0">
-        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-12 mb-2 mt-12">
+      <div className="max-w-7xl mx-auto px-6 pt-4 pb-4">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-12 mb-12">
           {/* Brand */}
-          <div className="space-y-4 md:flex-shrink-0">
+          <div className="space-y-4 md:flex-shrink-0 md:mr-auto">
             <Image
               src="/aura-luxe-logo.png"
               alt="Aura Luxe"
