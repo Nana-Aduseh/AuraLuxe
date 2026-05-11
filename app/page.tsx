@@ -54,10 +54,23 @@ export default function Home() {
           const firstName = profile.name.split(' ')[0]
           setUserName(firstName)
         }
+      } else {
+        setUserName(null)
       }
     }
 
     getUser()
+
+    const supabase = createClient()
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      getUser()
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [])
 
   useEffect(() => {
@@ -101,6 +114,10 @@ export default function Home() {
 
   const handleCartAdded = () => {
     setRefreshCart((prev) => prev + 1)
+  }
+
+  const handleAllExtensionsClick = () => {
+    window.location.href = '/extensions'
   }
 
   return (
@@ -194,6 +211,7 @@ export default function Home() {
           products={allProducts}
           title="All Extensions"
           onProductClick={handleProductClick}
+          onTitleClick={handleAllExtensionsClick}
         />
       )}
 
