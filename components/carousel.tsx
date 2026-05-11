@@ -21,13 +21,12 @@ export default function Carousel({
 }: CarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [autoPlay, setAutoPlay] = useState(true)
-  const [isMobile, setIsMobile] = useState(false)
-  const [isTablet, setIsTablet] = useState(false)
+  const [isSmallDevice, setIsSmallDevice] = useState(false)
 
   useEffect(() => {
     const checkScreenSize = () => {
-      setIsMobile(window.innerWidth < 640) // Mobile: < 640px (before sm)
-      setIsTablet(window.innerWidth >= 640 && window.innerWidth < 1024) // Tablet: 640-1024px (sm to lg)
+      // Show 2 items only on very small screens (mobile), 3 items on everything else
+      setIsSmallDevice(window.innerWidth < 768) // Mobile: < 768px
     }
     checkScreenSize()
     window.addEventListener('resize', checkScreenSize)
@@ -58,10 +57,10 @@ export default function Carousel({
 
   if (products.length === 0) return null
 
-  // Match grid columns: 2 on mobile, 3 on tablet and desktop
-  let itemsToShow = 3 // default for large screens
-  if (isMobile) {
-    itemsToShow = 2
+  // Show 3 items on all tablets and larger, 2 items only on mobile
+  let itemsToShow = 3 // default for tablet and above
+  if (isSmallDevice) {
+    itemsToShow = 2 // mobile only
   }
   
   const visibleProducts = Array.from({ length: itemsToShow }, (_, i) =>
@@ -100,7 +99,7 @@ export default function Carousel({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-6 lg:gap-8">
           {visibleProducts.map((product, index) => (
             <div
               key={`${product.id}-${index}`}
