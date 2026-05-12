@@ -9,6 +9,9 @@ interface OrderWithDetails {
   user_id: string
   total_amount: number
   status: string
+  order_type: string
+  confirmation_status: string
+  delivery_status: string | null
   created_at: string
   updated_at: string
   user_name?: string
@@ -29,6 +32,7 @@ export default function AdminOrders() {
   const [orders, setOrders] = useState<OrderWithDetails[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null)
+  const [filterTab, setFilterTab] = useState<'all' | 'pending' | 'confirmed' | 'shipped'>('all')
   const supabase = createClient()
 
   useEffect(() => {
@@ -94,18 +98,39 @@ export default function AdminOrders() {
     setLoading(false)
   }
 
-  const handleStatusUpdate = async (orderId: string, newStatus: string) => {
+  const handleConfirmationStatusUpdate = async (orderId: string, newStatus: string) => {
     const { error } = await supabase
       .from('orders')
-      .update({ status: newStatus })
+      .update({ confirmation_status: newStatus })
       .eq('id', orderId)
 
     if (!error) {
       loadOrders()
     } else {
-      alert('Error updating order status')
+      alert('Error updating confirmation status')
     }
   }
+
+  const handleDeliveryStatusUpdate = async (orderId: string, newStatus: string) => {
+    const { error } = await supabase
+      .from('orders')
+      .update({ delivery_status: newStatus })
+      .eq('id', orderId)
+
+    if (!error) {
+      loadOrders()
+    } else {
+      alert('Error updating delivery status')
+    }
+  }
+
+  const filteredOrders = orders.filter((order) => {
+    if (filterTab === 'all') return true
+    if (filterTab === 'pending') return order.confirmation_status === 'not_confirmed'
+    if (filterTab === 'confirmed') return order.confirmation_status === 'confirmed' && !order.delivery_status
+    if (filterTab === 'shipped') return order.delivery_status === 'sent' || order.delivery_status === 'received'
+    return true
+  })
 
   if (loading) {
     return (
@@ -117,15 +142,59 @@ export default function AdminOrders() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-8">Orders</h2>
+      <h2 className="text-2xl font-bold text-gray-900 mb-6">Orders</h2>
 
-      {orders.length === 0 ? (
+      {/* Filter Tabs */}
+      <div className="flex gap-2 mb-6 flex-wrap">
+        <button
+          onClick={() => setFilterTab('all')}
+          className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
+            filterTab === 'all'
+              ? 'bg-amber-600 text-white border-amber-600'
+              : 'bg-white text-gray-700 border-gray-200 hover:border-amber-300'
+          }`}
+        >
+          All Orders ({orders.length})
+        </button>
+        <button
+          onClick={() => setFilterTab('pending')}
+          className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
+            filterTab === 'pending'
+              ? 'bg-amber-600 text-white border-amber-600'
+              : 'bg-white text-gray-700 border-gray-200 hover:border-amber-300'
+          }`}
+        >
+          Pending ({orders.filter((o) => o.confirmation_status === 'not_confirmed').length})
+        </button>
+        <button
+          onClick={() => setFilterTab('confirmed')}
+          className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
+            filterTab === 'confirmed'
+              ? 'bg-amber-600 text-white border-amber-600'
+              : 'bg-white text-gray-700 border-gray-200 hover:border-amber-300'
+          }`}
+        >
+          Confirmed ({orders.filter((o) => o.confirmation_status === 'confirmed' && !o.delivery_status).length})
+        </button>
+        <button
+          onClick={() => setFilterTab('shipped')}
+          className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
+            filterTab === 'shipped'
+              ? 'bg-amber-600 text-white border-amber-600'
+              : 'bg-white text-gray-700 border-gray-200 hover:border-amber-300'
+          }`}
+        >
+          Shipped ({orders.filter((o) => o.delivery_status === 'sent' || o.delivery_status === 'received').length})
+        </button>
+      </div>
+
+      {filteredOrders.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <p className="text-gray-500">No orders yet</p>
+          <p className="text-gray-500">No orders in this category</p>
         </div>
       ) : (
         <div className="space-y-4">
-          {orders.map((order) => (
+          {filteredOrders.map((order) => (
             <div
               key={order.id}
               className="bg-white rounded-lg border border-gray-200 overflow-hidden"
@@ -133,7 +202,7 @@ export default function AdminOrders() {
               <div className="px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-gray-50"
                    onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}>
                 <div className="flex-1">
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 flex-wrap">
                     <div>
                       <p className="font-semibold text-gray-900">
                         {order.user_name}
@@ -148,32 +217,22 @@ export default function AdminOrders() {
                         {new Date(order.created_at).toLocaleDateString()}
                       </p>
                     </div>
+                    <div className="hidden md:block">
+                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                        order.order_type === 'delivery'
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-purple-100 text-purple-700'
+                      }`}>
+                        {order.order_type === 'delivery' ? '🚚 Delivery' : '📍 Pickup'}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-wrap justify-end">
                   <div className="text-right">
                     <p className="font-semibold text-amber-600">
                       {formatPrice(order.total_amount)}
                     </p>
-                    <select
-                      value={order.status}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) =>
-                        handleStatusUpdate(order.id, e.target.value)
-                      }
-                      className={`text-sm px-2 py-1 rounded border ${
-                        order.status === 'completed'
-                          ? 'bg-green-100 border-green-300 text-green-700'
-                          : order.status === 'processing'
-                            ? 'bg-blue-100 border-blue-300 text-blue-700'
-                            : 'bg-yellow-100 border-yellow-300 text-yellow-700'
-                      }`}
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="processing">Processing</option>
-                      <option value="completed">Completed</option>
-                      <option value="cancelled">Cancelled</option>
-                    </select>
                   </div>
                   <span className="text-gray-400">
                     {expandedOrder === order.id ? '▼' : '▶'}
@@ -182,22 +241,85 @@ export default function AdminOrders() {
               </div>
 
               {expandedOrder === order.id && (
-                <div className="border-t border-gray-200 px-6 py-4 bg-gray-50">
-                  <h4 className="font-semibold text-gray-900 mb-3">Order Items</h4>
-                  <div className="space-y-2">
-                    {order.order_items?.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between text-sm text-gray-600"
+                <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 space-y-6">
+                  {/* Status Controls */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Confirmation Status */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Confirmation Status
+                      </label>
+                      <select
+                        value={order.confirmation_status}
+                        onChange={(e) => handleConfirmationStatusUpdate(order.id, e.target.value)}
+                        className={`w-full text-sm px-3 py-2 rounded border font-medium transition-colors ${
+                          order.confirmation_status === 'confirmed'
+                            ? 'bg-green-100 border-green-300 text-green-700'
+                            : 'bg-yellow-100 border-yellow-300 text-yellow-700'
+                        }`}
                       >
-                        <span>
-                          {item.product_name} ({item.color_name})
-                        </span>
-                        <span>
-                          {item.quantity_ordered}x {formatPrice(item.price_at_purchase)}
-                        </span>
+                        <option value="not_confirmed">Not Confirmed</option>
+                        <option value="confirmed">Confirmed</option>
+                      </select>
+                    </div>
+
+                    {/* Delivery Status - Only show if confirmed */}
+                    {order.confirmation_status === 'confirmed' && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Delivery Status
+                        </label>
+                        <select
+                          value={order.delivery_status || ''}
+                          onChange={(e) => handleDeliveryStatusUpdate(order.id, e.target.value)}
+                          className={`w-full text-sm px-3 py-2 rounded border font-medium transition-colors ${
+                            order.delivery_status === 'received'
+                              ? 'bg-green-100 border-green-300 text-green-700'
+                              : order.delivery_status === 'sent'
+                                ? 'bg-blue-100 border-blue-300 text-blue-700'
+                                : 'bg-gray-100 border-gray-300 text-gray-700'
+                          }`}
+                        >
+                          <option value="">Mark as Sent/Received</option>
+                          <option value="sent">Sent</option>
+                          <option value="received">Received</option>
+                        </select>
                       </div>
-                    ))}
+                    )}
+
+                    {/* Order Type */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Delivery Method
+                      </label>
+                      <div className={`w-full text-sm px-3 py-2 rounded border font-medium text-center ${
+                        order.order_type === 'delivery'
+                          ? 'bg-blue-100 border-blue-300 text-blue-700'
+                          : 'bg-purple-100 border-purple-300 text-purple-700'
+                      }`}>
+                        {order.order_type === 'delivery' ? '🚚 Delivery' : '📍 Pickup'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Order Items */}
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-3">Order Items</h4>
+                    <div className="space-y-2">
+                      {order.order_items?.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between text-sm text-gray-600 p-2 bg-white rounded"
+                        >
+                          <span>
+                            {item.product_name} ({item.color_name})
+                          </span>
+                          <span>
+                            {item.quantity_ordered}x {formatPrice(item.price_at_purchase)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}

@@ -18,6 +18,7 @@ export default function CheckoutPage() {
   const [showPayment, setShowPayment] = useState(false)
   const [useSavedAddress, setUseSavedAddress] = useState(false)
   const [savedAddress, setSavedAddress] = useState<any>(null)
+  const [deliveryType, setDeliveryType] = useState<'delivery' | 'pickup'>('delivery')
   const router = useRouter()
   const supabase = createClient()
 
@@ -100,15 +101,34 @@ export default function CheckoutPage() {
     }
   }
 
+  const formatPhoneNumber = (value: string) => {
+    // Remove all non-digits
+    const digitsOnly = value.replace(/\D/g, '')
+    // Format as 0XXXXXXXXX (10 digits)
+    if (digitsOnly.length <= 10) {
+      return digitsOnly
+    }
+    return digitsOnly.slice(0, 10)
+  }
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value)
+    setPhone(formatted)
+  }
+
   const handleSubmitShipping = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!firstName || !lastName || !address || !town || !region) {
-      alert('Please fill in all required fields')
+    if (deliveryType === 'delivery' && (!address || !town || !region)) {
+      alert('Please fill in all delivery address fields')
+      return
+    }
+    if (!phone) {
+      alert('Please enter a phone number')
       return
     }
 
-    // Save address for future use
-    if (user && !useSavedAddress) {
+    // Save address for future use (only for delivery)
+    if (user && deliveryType === 'delivery' && !useSavedAddress) {
       await supabase.from('user_addresses').upsert({
         user_id: user.id,
         first_name: firstName,
@@ -140,7 +160,7 @@ export default function CheckoutPage() {
 
       // Create order
       if (user) {
-        const order = await createOrder(user.id, cartItems, total)
+        const order = await createOrder(user.id, cartItems, total, deliveryType)
 
         if (order) {
           router.push(`/order-confirmation/${order.id}`)
@@ -194,7 +214,7 @@ export default function CheckoutPage() {
             {!showPayment && (
               <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900 mb-6">
-                  Delivery Information
+                  Order Information
                 </h2>
 
                 {/* Use Saved Address Option */}
@@ -227,84 +247,105 @@ export default function CheckoutPage() {
                 )}
 
                 <form onSubmit={handleSubmitShipping} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        First Name *
-                      </label>
-                      <Input
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Last Name *
-                      </label>
-                      <Input
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
-
+                  {/* Delivery Type Selection */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Delivery Method *
                     </label>
-                    <Input value={email} disabled className="bg-gray-100" />
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="deliveryType"
+                          value="delivery"
+                          checked={deliveryType === 'delivery'}
+                          onChange={(e) => setDeliveryType(e.target.value as 'delivery' | 'pickup')}
+                          className="w-4 h-4"
+                        />
+                        <span className="text-sm text-gray-700">Home Delivery</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="deliveryType"
+                          value="pickup"
+                          checked={deliveryType === 'pickup'}
+                          onChange={(e) => setDeliveryType(e.target.value as 'delivery' | 'pickup')}
+                          className="w-4 h-4"
+                        />
+                        <span className="text-sm text-gray-700">Pickup</span>
+                      </label>
+                    </div>
                   </div>
 
+                  {/* Phone Number */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Phone Number
+                      Phone Number *
                     </label>
                     <Input
                       type="tel"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+234..."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Address *
-                    </label>
-                    <Input
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      placeholder="Street address"
+                      onChange={handlePhoneChange}
+                      placeholder="0240000000"
+                      maxLength={10}
                       required
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Town *
-                      </label>
-                      <Input
-                        value={town}
-                        onChange={(e) => setTown(e.target.value)}
-                        placeholder="Town/City"
-                        required
-                      />
+                  {/* Delivery Address Fields - Only show if delivery is selected */}
+                  {deliveryType === 'delivery' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Delivery Address *
+                        </label>
+                        <Input
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          placeholder="Street address"
+                          required
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Town *
+                          </label>
+                          <Input
+                            value={town}
+                            onChange={(e) => setTown(e.target.value)}
+                            placeholder="Town/City"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Region *
+                          </label>
+                          <Input
+                            value={region}
+                            onChange={(e) => setRegion(e.target.value)}
+                            placeholder="State/Region"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Pickup Info */}
+                  {deliveryType === 'pickup' && (
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-700">
+                        <strong>Pickup Location:</strong> Accra, Ghana
+                      </p>
+                      <p className="text-sm text-blue-700 mt-2">
+                        You will be contacted on the provided phone number to confirm pickup details.
+                      </p>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Region *
-                      </label>
-                      <Input
-                        value={region}
-                        onChange={(e) => setRegion(e.target.value)}
-                        placeholder="State/Region"
-                        required
-                      />
-                    </div>
-                  </div>
+                  )}
 
                   <Button
                     type="submit"

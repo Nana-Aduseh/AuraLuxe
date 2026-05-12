@@ -119,19 +119,44 @@ export default function ProductModal({
 
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Image */}
-            <div className="h-96 bg-gray-200 rounded-lg overflow-hidden">
-              {displayImageUrl ? (
-                <Image
-                  src={displayImageUrl}
-                  alt={selectedColorData?.color_name ? `${product.name} - ${selectedColorData.color_name}` : product.name}
-                  width={400}
-                  height={400}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gray-300">
-                  <span className="text-gray-500">No image</span>
+            {/* Image and Info */}
+            <div className="flex flex-col">
+              <div className="h-64 md:h-96 bg-gray-200 rounded-lg overflow-hidden mb-4">
+                {displayImageUrl ? (
+                  <Image
+                    src={displayImageUrl}
+                    alt={selectedColorData?.color_name ? `${product.name} - ${selectedColorData.color_name}` : product.name}
+                    width={400}
+                    height={400}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gray-300">
+                    <span className="text-gray-500">No image</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Product Info under image */}
+              {selectedQtyData && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm font-semibold text-gray-900 mb-2">Product Info</p>
+                  <p className="text-sm text-gray-600 mb-1">
+                    Length: {selectedQtyData.length_inches}"
+                  </p>
+                  <p className="text-sm text-gray-600 mb-2">
+                    In Stock: {selectedQtyData.stock_quantity} pieces
+                  </p>
+                  {selectedQtyData.stock_quantity < 10 && selectedQtyData.stock_quantity > 0 && (
+                    <p className="text-sm text-orange-600 font-semibold">
+                      ⚠️ Only {selectedQtyData.stock_quantity} left!
+                    </p>
+                  )}
+                  {selectedQtyData.stock_quantity === 0 && (
+                    <p className="text-sm text-red-600 font-semibold">
+                      Out of stock
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -240,28 +265,6 @@ export default function ProductModal({
                   </button>
                 </div>
               </div>
-
-              {/* Info */}
-              {selectedQtyData && (
-                <div className="mb-6 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-600">
-                    Length: {selectedQtyData.length_inches}"
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    In Stock: {selectedQtyData.stock_quantity} pieces
-                  </p>
-                  {selectedQtyData.stock_quantity < 10 && selectedQtyData.stock_quantity > 0 && (
-                    <p className="text-sm text-orange-600 font-semibold mt-2">
-                      ⚠️ Only {selectedQtyData.stock_quantity} left in stock!
-                    </p>
-                  )}
-                  {selectedQtyData.stock_quantity === 0 && (
-                    <p className="text-sm text-red-600 font-semibold mt-2">
-                      Out of stock
-                    </p>
-                  )}
-                </div>
-              )}
 
               {/* Action Buttons */}
               <div className="flex flex-col gap-3">

@@ -238,7 +238,8 @@ export async function updateCartItemQuantity(cartItemId: string, quantity: numbe
 export async function createOrder(
   userId: string,
   cartItems: CartItem[],
-  totalAmount: number
+  totalAmount: number,
+  deliveryType: 'delivery' | 'pickup' = 'delivery'
 ) {
   const supabase = createClient()
 
@@ -249,6 +250,8 @@ export async function createOrder(
       user_id: userId,
       total_amount: totalAmount,
       status: 'pending',
+      order_type: deliveryType,
+      confirmation_status: 'not_confirmed',
       payment_reference: `ORD-${Date.now()}`,
     })
     .select()
