@@ -47,14 +47,7 @@ export default function OrderConfirmationPage() {
 
       const { data: itemsData, error: itemsError } = await supabase
         .from('order_items')
-        .select(
-          `
-        *,
-        products(id, name, price),
-        product_colors(color_name),
-        product_quantities(length_inches)
-      `
-        )
+        .select('*')
         .eq('order_id', orderId)
 
       if (itemsError) {
@@ -63,7 +56,42 @@ export default function OrderConfirmationPage() {
 
       if (itemsData) {
         console.log('Order items data:', itemsData)
-        setOrderItems(itemsData)
+        
+        // Load product details for each item
+        const enrichedItems = await Promise.all(
+          itemsData.map(async (item: any) => {
+            // Load product
+            const { data: productData } = await supabase
+              .from('products')
+              .select('id, name, price')
+              .eq('id', item.product_id)
+              .single()
+
+            // Load color
+            const { data: colorData } = await supabase
+              .from('product_colors')
+              .select('color_name')
+              .eq('id', item.color_id)
+              .single()
+
+            // Load quantity
+            const { data: quantityData } = await supabase
+              .from('product_quantities')
+              .select('length_inches')
+              .eq('id', item.quantity_id)
+              .single()
+
+            return {
+              ...item,
+              product: productData,
+              color: colorData,
+              quantity_data: quantityData,
+            }
+          })
+        )
+        
+        console.log('Enriched items:', enrichedItems)
+        setOrderItems(enrichedItems)
       }
 
       // Send confirmation email
@@ -196,26 +224,17 @@ export default function OrderConfirmationPage() {
             <p className="font-semibold text-gray-900 mb-2">ORDER ITEMS</p>
             <div className="space-y-1">
               {orderItems && orderItems.length > 0 ? (
-                orderItems.map((item) => {
-                  // Handle both array and object responses from Supabase relations
-                  const product = Array.isArray(item.products) ? item.products[0] : item.products
-                  const color = Array.isArray(item.product_colors) ? item.product_colors[0] : item.product_colors
-                  const quantity_data = Array.isArray(item.product_quantities) ? item.product_quantities[0] : item.product_quantities
-
-                  console.log('Item:', item, 'Product:', product, 'Color:', color, 'Qty:', quantity_data)
-
-                  return (
-                    <div key={item.id} className="flex justify-between items-start py-1 border-b border-gray-200 last:border-0">
-                      <div className="flex-1 pr-2">
-                        <p className="font-medium text-gray-900">{product?.name || 'Product'}</p>
-                        <p className="text-gray-600">Color: {color?.color_name || 'N/A'} | Length: {quantity_data?.length_inches || 'N/A'}" | Qty: {item.quantity}</p>
-                      </div>
-                      <p className="font-semibold text-gray-900 whitespace-nowrap">
-                        {formatPrice((product?.price || 0) * (item.quantity || 1))}
-                      </p>
+                orderItems.map((item) => (
+                  <div key={item.id} className="flex justify-between items-start py-1 border-b border-gray-200 last:border-0">
+                    <div className="flex-1 pr-2">
+                      <p className="font-medium text-gray-900">{item.product?.name || 'Product'}</p>
+                      <p className="text-gray-600">Color: {item.color?.color_name || 'N/A'} | Length: {item.quantity_data?.length_inches || 'N/A'}" | Qty: {item.quantity}</p>
                     </div>
-                  )
-                })
+                    <p className="font-semibold text-gray-900 whitespace-nowrap">
+                      {formatPrice((item.product?.price || 0) * (item.quantity || 1))}
+                    </p>
+                  </div>
+                ))
               ) : (
                 <p className="text-gray-500">No items found</p>
               )}

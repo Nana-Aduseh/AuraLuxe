@@ -41,61 +41,77 @@ export default function AdminOrders() {
 
   const loadOrders = async () => {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        order_items (
-          id,
-          product_id,
-          quantity,
-          price,
-          products(id, name),
-          product_colors(color_name)
+    try {
+      // First try a simple query without relations
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error loading orders:', error)
+        setLoading(false)
+        return
+      }
+
+      console.log('Orders loaded:', data)
+
+      if (data) {
+        // Load order items separately for each order
+        const enrichedOrders = await Promise.all(
+          data.map(async (order: any) => {
+            const { data: items, error: itemsError } = await supabase
+              .from('order_items')
+              .select('*')
+              .eq('order_id', order.id)
+
+            if (itemsError) {
+              console.error(`Error loading items for order ${order.id}:`, itemsError)
+            }
+
+            console.log(`Items for order ${order.id}:`, items)
+
+            return {
+              ...order,
+              order_items: items || [],
+            }
+          })
         )
-      `)
-      .order('created_at', { ascending: false })
 
-    if (error) {
-      console.error('Error loading orders:', error)
-      setLoading(false)
-      return
-    }
+        // Load user profiles for each order
+        const orderIds = enrichedOrders.map((order: any) => order.user_id)
+        const uniqueUserIds = [...new Set(orderIds)]
 
-    console.log('Raw admin orders data:', data)
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, name, email')
+          .in('id', uniqueUserIds)
 
-    if (data) {
-      // Load user profiles for each order
-      const orderIds = data.map((order: any) => order.user_id)
-      const uniqueUserIds = [...new Set(orderIds)]
+        const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]))
 
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, name, email')
-        .in('id', uniqueUserIds)
+        const finalOrders: OrderWithDetails[] = enrichedOrders.map((order: any) => {
+          const profile = profileMap.get(order.user_id)
+          const items: OrderItem[] = (order.order_items || []).map((item: any) => ({
+            id: item.id,
+            product_id: item.product_id,
+            quantity_ordered: item.quantity,
+            price_at_purchase: item.price,
+            product_name: 'Unknown Product',
+            color_name: 'Unknown',
+          }))
 
-      const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]))
+          return {
+            ...order,
+            user_name: profile?.name || 'Unknown',
+            user_email: profile?.email || 'Unknown',
+            order_items: items,
+          }
+        })
 
-      const enrichedOrders: OrderWithDetails[] = data.map((order: any) => {
-        const profile = profileMap.get(order.user_id)
-        const items: OrderItem[] = (order.order_items || []).map((item: any) => ({
-          id: item.id,
-          product_id: item.product_id,
-          quantity_ordered: item.quantity,
-          price_at_purchase: item.price,
-          product_name: Array.isArray(item.products) ? item.products[0]?.name : item.products?.name,
-          color_name: Array.isArray(item.product_colors) ? item.product_colors[0]?.color_name : item.product_colors?.color_name,
-        }))
-
-        return {
-          ...order,
-          user_name: profile?.name || 'Unknown',
-          user_email: profile?.email || 'Unknown',
-          order_items: items,
-        }
-      })
-
-      setOrders(enrichedOrders)
+        setOrders(finalOrders)
+      }
+    } catch (err) {
+      console.error('Exception in loadOrders:', err)
     }
     setLoading(false)
   }
