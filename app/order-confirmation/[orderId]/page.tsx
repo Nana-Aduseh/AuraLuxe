@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { formatPrice } from '@/lib/currency'
-import { CheckCircle } from 'lucide-react'
+import { CheckCircle, Printer, Mail } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
@@ -14,6 +14,7 @@ export default function OrderConfirmationPage() {
   const [order, setOrder] = useState<any>(null)
   const [orderItems, setOrderItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [emailSent, setEmailSent] = useState(false)
   const supabase = createClient()
 
   const orderId = params.orderId as string
@@ -59,11 +60,46 @@ export default function OrderConfirmationPage() {
         setOrderItems(itemsData)
       }
 
+      // Send confirmation email
+      if (!emailSent) {
+        sendConfirmationEmail(user.email, orderData, itemsData)
+        setEmailSent(true)
+      }
+
       setLoading(false)
     }
 
     loadOrder()
   }, [orderId])
+
+  const sendConfirmationEmail = async (email: string | undefined, orderData: any, itemsData: any[]) => {
+    if (!email) return
+
+    try {
+      const response = await fetch('/api/send-order-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          orderId: orderData.id,
+          orderNumber: orderData.id.slice(0, 8).toUpperCase(),
+          totalAmount: orderData.total_amount,
+          items: itemsData,
+          createdAt: orderData.created_at,
+        }),
+      })
+
+      if (response.ok) {
+        console.log('Confirmation email sent successfully')
+      }
+    } catch (error) {
+      console.error('Error sending confirmation email:', error)
+    }
+  }
+
+  const handlePrint = () => {
+    window.print()
+  }
 
   if (loading) {
     return (
@@ -88,6 +124,30 @@ export default function OrderConfirmationPage() {
   return (
     <main className="min-h-screen bg-white">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        {/* Actions */}
+        <div className="no-print flex flex-col sm:flex-row gap-4 justify-center mb-8">
+          <Button
+            onClick={handlePrint}
+            className="bg-blue-600 hover:bg-blue-700 text-white py-3 flex items-center justify-center gap-2"
+          >
+            <Printer className="w-5 h-5" />
+            Print Receipt
+          </Button>
+          <Button
+            asChild
+            className="bg-amber-600 hover:bg-amber-700 text-white py-3"
+          >
+            <Link href="/">Continue Shopping</Link>
+          </Button>
+          <Button
+            variant="outline"
+            asChild
+            className="py-3"
+          >
+            <Link href="/">Back to Home</Link>
+          </Button>
+        </div>
+
         {/* Success Message */}
         <div className="text-center mb-12">
           <div className="flex justify-center mb-4">
@@ -177,7 +237,14 @@ export default function OrderConfirmationPage() {
         </div>
 
         {/* Actions */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+        <div className="no-print flex flex-col sm:flex-row gap-4 justify-center mt-8 mb-8">
+          <Button
+            onClick={handlePrint}
+            className="bg-blue-600 hover:bg-blue-700 text-white py-3 flex items-center justify-center gap-2"
+          >
+            <Printer className="w-5 h-5" />
+            Print Receipt
+          </Button>
           <Button
             asChild
             className="bg-amber-600 hover:bg-amber-700 text-white py-3"
@@ -194,7 +261,7 @@ export default function OrderConfirmationPage() {
         </div>
 
         {/* Contact Info */}
-        <div className="text-center mt-12 pt-8 border-t border-gray-200">
+        <div className="no-print text-center mt-12 pt-8 border-t border-gray-200">
           <p className="text-gray-600 text-sm">
             Have questions? Contact us at{' '}
             <a

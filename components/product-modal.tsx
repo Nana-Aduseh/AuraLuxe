@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { formatPrice } from '@/lib/currency'
-import { X, ShoppingCart } from 'lucide-react'
+import { X, ShoppingCart, Zap } from 'lucide-react'
 import { Product, ProductColor, ProductQuantity, addToCart } from '@/lib/api'
 import { createClient } from '@/lib/supabase/client'
 
@@ -23,6 +24,7 @@ export default function ProductModal({
   onClose,
   onAddedToCart,
 }: ProductModalProps) {
+  const router = useRouter()
   const [selectedColor, setSelectedColor] = useState<string>(
     colors[0]?.id || ''
   )
@@ -60,6 +62,38 @@ export default function ProductModal({
     } catch (error) {
       console.error('Error adding to cart:', error)
       alert('Failed to add to cart. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleBuyNow = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      window.location.href = '/auth/login'
+      return
+    }
+
+    // Check stock availability
+    const selectedQtyData = quantities.find((q) => q.id === selectedQuantity)
+    const availableStock = selectedQtyData?.stock_quantity || 0
+
+    if (quantity > availableStock) {
+      alert(`Sorry, only ${availableStock} ${availableStock === 1 ? 'piece' : 'pieces'} available for this selection.`)
+      return
+    }
+
+    setLoading(true)
+    try {
+      await addToCart(user.id, product.id, selectedColor, selectedQuantity, quantity)
+      onClose()
+      router.push('/checkout')
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Failed to proceed. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -106,17 +140,13 @@ export default function ProductModal({
             <div className="flex flex-col">
               <div className="mb-6">
                 <p className="text-gray-600 mb-4">{product.description}</p>
-                <div className="text-sm font-semibold text-gray-600 mb-2">
-                  Unit Price
-                </div>
-                <div className="text-3xl font-bold text-amber-600 mb-4">
-                  {formatPrice(product.price)}
-                </div>
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                  <div className="text-sm text-gray-600 mb-1">
-                    Total for {quantity} {quantity === 1 ? 'piece' : 'pieces'}:
+                
+                {/* Simplified Price Display */}
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+                  <div className="text-sm text-gray-600 mb-2">
+                    Price: {formatPrice(product.price)} × {quantity} {quantity === 1 ? 'piece' : 'pieces'}
                   </div>
-                  <div className="text-2xl font-bold text-amber-700">
+                  <div className="text-3xl font-bold text-amber-700">
                     {formatPrice(product.price * quantity)}
                   </div>
                 </div>
@@ -215,7 +245,7 @@ export default function ProductModal({
               {selectedQtyData && (
                 <div className="mb-6 p-3 bg-gray-50 rounded-lg">
                   <p className="text-sm text-gray-600">
-                    Weight: {selectedQtyData.weight_grams}g
+                    Length: {selectedQtyData.length_inches}"
                   </p>
                   <p className="text-sm text-gray-600">
                     In Stock: {selectedQtyData.stock_quantity} pieces
@@ -233,15 +263,26 @@ export default function ProductModal({
                 </div>
               )}
 
-              {/* Add to Cart Button */}
-              <Button
-                onClick={handleAddToCart}
-                disabled={loading || !selectedQtyData?.stock_quantity}
-                className="w-full bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ShoppingCart className="w-5 h-5" />
-                {loading ? 'Adding...' : 'Add to Cart'}
-              </Button>
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-3">
+                <Button
+                  onClick={handleBuyNow}
+                  disabled={loading || !selectedQtyData?.stock_quantity}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Zap className="w-5 h-5" />
+                  {loading ? 'Processing...' : 'Buy Now'}
+                </Button>
+                <Button
+                  onClick={handleAddToCart}
+                  disabled={loading || !selectedQtyData?.stock_quantity}
+                  variant="outline"
+                  className="w-full py-3 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ShoppingCart className="w-5 h-5" />
+                  {loading ? 'Adding...' : 'Add to Cart'}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

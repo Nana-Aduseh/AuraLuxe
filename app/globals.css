@@ -123,3 +123,58 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Print styles for order receipt */
+@media print {
+  /* Hide elements that shouldn't be printed */
+  .no-print,
+  header,
+  footer,
+  nav,
+  button,
+  [role="navigation"] {
+    display: none !important;
+  }
+
+  /* Optimize for printing */
+  body {
+    background: white;
+    color: black;
+  }
+
+  main {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  .max-w-2xl {
+    max-width: 100%;
+  }
+
+  /* Ensure content is readable */
+  h1, h2, h3 {
+    page-break-after: avoid;
+  }
+
+  .bg-gray-50,
+  .bg-green-50,
+  .bg-blue-50,
+  .bg-amber-50 {
+    background: white;
+    border: 1px solid #ccc;
+  }
+
+  /* Ensure good contrast for printing */
+  .text-amber-600,
+  .text-amber-700,
+  .text-green-600 {
+    color: #000;
+  }
+
+  /* Print-friendly spacing */
+  @page {
+    margin: 0.5in;
+  }
+}
