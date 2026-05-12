@@ -45,7 +45,7 @@ export default function OrderConfirmationPage() {
 
       setOrder(orderData)
 
-      const { data: itemsData } = await supabase
+      const { data: itemsData, error: itemsError } = await supabase
         .from('order_items')
         .select(
           `
@@ -57,7 +57,12 @@ export default function OrderConfirmationPage() {
         )
         .eq('order_id', orderId)
 
+      if (itemsError) {
+        console.error('Error loading order items:', itemsError)
+      }
+
       if (itemsData) {
+        console.log('Order items data:', itemsData)
         setOrderItems(itemsData)
       }
 
@@ -196,6 +201,8 @@ export default function OrderConfirmationPage() {
                   const product = Array.isArray(item.products) ? item.products[0] : item.products
                   const color = Array.isArray(item.product_colors) ? item.product_colors[0] : item.product_colors
                   const quantity_data = Array.isArray(item.product_quantities) ? item.product_quantities[0] : item.product_quantities
+
+                  console.log('Item:', item, 'Product:', product, 'Color:', color, 'Qty:', quantity_data)
 
                   return (
                     <div key={item.id} className="flex justify-between items-start py-1 border-b border-gray-200 last:border-0">

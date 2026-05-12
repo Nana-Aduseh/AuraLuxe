@@ -62,6 +62,8 @@ export default function AdminOrders() {
       return
     }
 
+    console.log('Raw admin orders data:', data)
+
     if (data) {
       // Load user profiles for each order
       const orderIds = data.map((order: any) => order.user_id)
