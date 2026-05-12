@@ -251,8 +251,19 @@ export default function OrderConfirmationPage() {
                 orderItems.map((item) => (
                   <div key={item.id} className="flex justify-between items-start py-1 border-b border-gray-200 last:border-0">
                     <div className="flex-1 pr-2">
-                      <p className="font-medium text-gray-900">{item.product?.name || 'Product'}</p>
-                      <p className="text-gray-600">Color: {item.color?.color_name || 'N/A'} | Length: {item.quantity_data?.length_inches || 'N/A'}" | Qty: {item.quantity}</p>
+                      <p className="font-medium text-gray-900">
+                        {item.product?.name || item.product_id || 'Unknown Product'}
+                      </p>
+                      <p className="text-gray-600">
+                        Color: {item.color?.color_name || (item.color_id ? 'Loading...' : 'N/A')} | 
+                        Length: {item.quantity_data?.length_inches || (item.quantity_id ? 'Loading...' : 'N/A')}" | 
+                        Qty: {item.quantity}
+                      </p>
+                      {!item.product && (
+                        <p className="text-xs text-orange-600 mt-1">
+                          ⚠ Product data unavailable (ID: {item.product_id})
+                        </p>
+                      )}
                     </div>
                     <p className="font-semibold text-gray-900 whitespace-nowrap">
                       {formatPrice((item.product?.price || 0) * (item.quantity || 1))}
@@ -260,7 +271,12 @@ export default function OrderConfirmationPage() {
                   </div>
                 ))
               ) : (
-                <p className="text-gray-500">No items found</p>
+                <div className="text-gray-500 py-2">
+                  <p>No items found</p>
+                  {orderItems.length === 0 && (
+                    <p className="text-xs text-orange-600 mt-1">Order may have been placed before item tracking was enabled</p>
+                  )}
+                </div>
               )}
             </div>
           </div>

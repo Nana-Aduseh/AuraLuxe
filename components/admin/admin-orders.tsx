@@ -145,7 +145,7 @@ export default function AdminOrders() {
   const filteredOrders = orders.filter((order) => {
     if (filterTab === 'all') return true
     if (filterTab === 'pending') return order.confirmation_status === 'not_confirmed'
-    if (filterTab === 'confirmed') return order.confirmation_status === 'confirmed' && !order.delivery_status
+    if (filterTab === 'confirmed') return order.confirmation_status === 'confirmed'
     if (filterTab === 'shipped') return order.delivery_status === 'sent' || order.delivery_status === 'received'
     return true
   })
@@ -322,21 +322,27 @@ export default function AdminOrders() {
 
                   {/* Order Items */}
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-3">Order Items</h4>
+                    <h4 className="font-semibold text-gray-900 mb-3">Order Items ({order.order_items?.length || 0})</h4>
                     <div className="space-y-2">
-                      {order.order_items?.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between text-sm text-gray-600 p-2 bg-white rounded"
-                        >
-                          <span>
-                            {item.product_name} ({item.color_name})
-                          </span>
-                          <span>
-                            {item.quantity_ordered}x {formatPrice(item.price_at_purchase)}
-                          </span>
-                        </div>
-                      ))}
+                      {order.order_items && order.order_items.length > 0 ? (
+                        order.order_items.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between text-sm text-gray-600 p-2 bg-white rounded"
+                          >
+                            <span>
+                              {item.product_name || `Product ID: ${item.product_id}`} {item.color_name && `(${item.color_name})`}
+                            </span>
+                            <span>
+                              {item.quantity_ordered}x {formatPrice(item.price_at_purchase)}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-orange-600 p-2 bg-orange-50 rounded">
+                          No items found for this order
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
