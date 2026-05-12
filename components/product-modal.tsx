@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { formatPrice } from '@/lib/currency'
-import { X, ShoppingCart, Zap } from 'lucide-react'
+import { X, ShoppingCart, Bolt } from 'lucide-react'
 import { Product, ProductColor, ProductQuantity, addToCart } from '@/lib/api'
 import { createClient } from '@/lib/supabase/client'
 
@@ -270,7 +270,7 @@ export default function ProductModal({
                   disabled={loading || !selectedQtyData?.stock_quantity}
                   className="w-full bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Zap className="w-5 h-5" />
+                  <Bolt className="w-5 h-5" />
                   {loading ? 'Processing...' : 'Buy Now'}
                 </Button>
                 <Button
