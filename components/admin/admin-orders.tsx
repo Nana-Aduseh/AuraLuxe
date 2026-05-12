@@ -143,11 +143,22 @@ export default function AdminOrders() {
   }
 
   const filteredOrders = orders.filter((order) => {
-    if (filterTab === 'all') return true
-    if (filterTab === 'pending') return order.confirmation_status === 'not_confirmed'
-    if (filterTab === 'confirmed') return order.confirmation_status === 'confirmed'
-    if (filterTab === 'shipped') return order.delivery_status === 'sent' || order.delivery_status === 'received'
-    return true
+    const matches = {
+      all: true,
+      pending: order.confirmation_status === 'not_confirmed',
+      confirmed: order.confirmation_status === 'confirmed',
+      shipped: order.delivery_status === 'sent' || order.delivery_status === 'received',
+    }
+    
+    const result = filterTab === 'all' ? true :
+                   filterTab === 'pending' ? order.confirmation_status === 'not_confirmed' :
+                   filterTab === 'confirmed' ? order.confirmation_status === 'confirmed' :
+                   filterTab === 'shipped' ? (order.delivery_status === 'sent' || order.delivery_status === 'received') :
+                   true
+    
+    console.log(`Filter check - Tab: ${filterTab}, Order: ${order.id}, Confirmation: ${order.confirmation_status}, Delivery: ${order.delivery_status}, Matches:`, matches, 'Result:', result)
+    
+    return result
   })
 
   if (loading) {
@@ -165,7 +176,10 @@ export default function AdminOrders() {
       {/* Filter Tabs */}
       <div className="flex gap-2 mb-6 flex-wrap">
         <button
-          onClick={() => setFilterTab('all')}
+          onClick={() => {
+            console.log('Clicking pending tab, current filterTab:', filterTab)
+            setFilterTab('all')
+          }}
           className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
             filterTab === 'all'
               ? 'bg-amber-600 text-white border-amber-600'
@@ -175,34 +189,43 @@ export default function AdminOrders() {
           All Orders ({orders.length})
         </button>
         <button
-          onClick={() => setFilterTab('pending')}
+          onClick={() => {
+            console.log('Clicking pending tab, current filterTab:', filterTab)
+            setFilterTab('pending')
+          }}
           className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
             filterTab === 'pending'
               ? 'bg-amber-600 text-white border-amber-600'
               : 'bg-white text-gray-700 border-gray-200 hover:border-amber-300'
           }`}
         >
-          Pending ({orders.filter((o) => o.confirmation_status === 'not_confirmed').length})
+          Pending ({orders.filter(o => o.confirmation_status === 'not_confirmed').length})
         </button>
         <button
-          onClick={() => setFilterTab('confirmed')}
+          onClick={() => {
+            console.log('Clicking confirmed tab, current filterTab:', filterTab)
+            setFilterTab('confirmed')
+          }}
           className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
             filterTab === 'confirmed'
               ? 'bg-amber-600 text-white border-amber-600'
               : 'bg-white text-gray-700 border-gray-200 hover:border-amber-300'
           }`}
         >
-          Confirmed ({orders.filter((o) => o.confirmation_status === 'confirmed').length})
+          Confirmed ({orders.filter(o => o.confirmation_status === 'confirmed').length})
         </button>
         <button
-          onClick={() => setFilterTab('shipped')}
+          onClick={() => {
+            console.log('Clicking shipped tab, current filterTab:', filterTab)
+            setFilterTab('shipped')
+          }}
           className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
             filterTab === 'shipped'
               ? 'bg-amber-600 text-white border-amber-600'
               : 'bg-white text-gray-700 border-gray-200 hover:border-amber-300'
           }`}
         >
-          Shipped ({orders.filter((o) => o.delivery_status === 'sent' || o.delivery_status === 'received').length})
+          Shipped ({orders.filter(o => o.delivery_status === 'sent' || o.delivery_status === 'received').length})
         </button>
       </div>
 
