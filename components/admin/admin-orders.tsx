@@ -192,7 +192,7 @@ export default function AdminOrders() {
               : 'bg-white text-gray-700 border-gray-200 hover:border-amber-300'
           }`}
         >
-          Confirmed ({orders.filter((o) => o.confirmation_status === 'confirmed' && !o.delivery_status).length})
+          Confirmed ({orders.filter((o) => o.confirmation_status === 'confirmed').length})
         </button>
         <button
           onClick={() => setFilterTab('shipped')}

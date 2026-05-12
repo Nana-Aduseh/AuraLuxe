@@ -230,35 +230,15 @@ export default function Header({ onSearch }: HeaderProps) {
               )}
             </div>
 
-            {/* Mobile Menu Button / Back Button */}
-            {isHomePage ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="md:hidden"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              >
-                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </Button>
-            ) : (
-              <div className="flex items-center gap-2 md:hidden">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => router.push('/')}
-                  title="Back to Home"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                >
-                  {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-                </Button>
-              </div>
-            )}
+            {/* Mobile Menu Button - Always Visible on Mobile */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </Button>
           </div>
         </div>
 

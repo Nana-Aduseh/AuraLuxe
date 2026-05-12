@@ -60,32 +60,56 @@ export default function OrderConfirmationPage() {
         // Load product details for each item
         const enrichedItems = await Promise.all(
           itemsData.map(async (item: any) => {
-            // Load product
-            const { data: productData } = await supabase
-              .from('products')
-              .select('id, name, price')
-              .eq('id', item.product_id)
-              .single()
+            try {
+              // Load product
+              const { data: productData, error: productError } = await supabase
+                .from('products')
+                .select('id, name, price')
+                .eq('id', item.product_id)
+                .single()
 
-            // Load color
-            const { data: colorData } = await supabase
-              .from('product_colors')
-              .select('color_name')
-              .eq('id', item.color_id)
-              .single()
+              if (productError) console.error('Error loading product:', productError)
 
-            // Load quantity
-            const { data: quantityData } = await supabase
-              .from('product_quantities')
-              .select('length_inches')
-              .eq('id', item.quantity_id)
-              .single()
+              // Load color if color_id exists
+              let colorData = null
+              if (item.color_id) {
+                const { data: colorRes, error: colorError } = await supabase
+                  .from('product_colors')
+                  .select('color_name')
+                  .eq('id', item.color_id)
+                  .single()
 
-            return {
-              ...item,
-              product: productData,
-              color: colorData,
-              quantity_data: quantityData,
+                if (colorError) console.warn('Error loading color:', colorError)
+                else colorData = colorRes
+              }
+
+              // Load quantity if quantity_id exists
+              let quantityData = null
+              if (item.quantity_id) {
+                const { data: quantityRes, error: quantityError } = await supabase
+                  .from('product_quantities')
+                  .select('length_inches')
+                  .eq('id', item.quantity_id)
+                  .single()
+
+                if (quantityError) console.warn('Error loading quantity:', quantityError)
+                else quantityData = quantityRes
+              }
+
+              return {
+                ...item,
+                product: productData,
+                color: colorData,
+                quantity_data: quantityData,
+              }
+            } catch (err) {
+              console.error('Error enriching item:', err)
+              return {
+                ...item,
+                product: null,
+                color: null,
+                quantity_data: null,
+              }
             }
           })
         )
