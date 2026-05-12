@@ -412,7 +412,7 @@ export default function CheckoutPage() {
                     onClick={() => setShowPayment(false)}
                     className="text-amber-600 hover:text-amber-700 text-sm"
                   >
-                    ← Back to Shipping
+                    ← Back to Delivery
                   </button>
                 </div>
 
@@ -537,7 +537,7 @@ export default function CheckoutPage() {
                   <span>{formatPrice(total)}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
-                  <span>Shipping</span>
+                  <span>Delivery</span>
                   <span>To be determined</span>
                 </div>
               </div>

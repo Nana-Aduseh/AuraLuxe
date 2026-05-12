@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { formatPrice } from '@/lib/currency'
 import { CheckCircle, Printer, Mail } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 
 export default function OrderConfirmationPage() {
@@ -49,9 +50,9 @@ export default function OrderConfirmationPage() {
         .select(
           `
         *,
-        products(*),
-        product_colors(*),
-        product_quantities(*)
+        products(id, name, price),
+        product_colors(color_name),
+        product_quantities(length_inches)
       `
         )
         .eq('order_id', orderId)
@@ -123,154 +124,119 @@ export default function OrderConfirmationPage() {
 
   return (
     <main className="min-h-screen bg-white">
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Actions */}
-        <div className="no-print flex flex-col sm:flex-row gap-4 justify-center mb-8">
+        <div className="no-print flex flex-col sm:flex-row gap-3 justify-center mb-8">
           <Button
             onClick={handlePrint}
-            className="bg-blue-600 hover:bg-blue-700 text-white py-3 flex items-center justify-center gap-2"
+            className="bg-blue-600 hover:bg-blue-700 text-white py-2 text-sm flex items-center justify-center gap-2"
           >
-            <Printer className="w-5 h-5" />
+            <Printer className="w-4 h-4" />
             Print Receipt
           </Button>
           <Button
             asChild
-            className="bg-amber-600 hover:bg-amber-700 text-white py-3"
+            className="bg-amber-600 hover:bg-amber-700 text-white py-2 text-sm"
           >
             <Link href="/">Continue Shopping</Link>
           </Button>
           <Button
             variant="outline"
             asChild
-            className="py-3"
+            className="py-2 text-sm"
           >
-            <Link href="/">Back to Home</Link>
+            <Link href="/orders">View Orders</Link>
           </Button>
         </div>
 
-        {/* Success Message */}
-        <div className="text-center mb-12">
-          <div className="flex justify-center mb-4">
-            <CheckCircle className="w-16 h-16 text-green-500" />
+        {/* Receipt Container - Optimized for single page printing */}
+        <div className="bg-white border-2 border-gray-300 p-6 space-y-4">
+          {/* Header with Logo and Business Name */}
+          <div className="text-center border-b-2 border-gray-300 pb-3">
+            <div className="flex justify-center mb-2">
+              <Image
+                src="/aura-luxe-logo.png"
+                alt="Aura Luxe"
+                width={100}
+                height={40}
+                className="h-10 w-auto"
+              />
+            </div>
+            <h1 className="text-lg font-bold text-gray-900">AURA LUXE EXTENSIONS</h1>
+            <p className="text-xs text-gray-600">Premium Quality Hair Extensions</p>
           </div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-6">
-            Your order has been confirmed
-          </h1>
-          
-          <div className="space-y-3 text-left max-w-md mx-auto mb-8 bg-green-50 border border-green-200 rounded-lg p-6">
-            <div className="flex items-start gap-3">
-              <span className="text-green-600 font-bold mt-1">✓</span>
-              <p className="text-gray-700">Your hair extensions will be shipped within 2-3 business days</p>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="text-green-600 font-bold mt-1">✓</span>
-              <p className="text-gray-700">You'll receive tracking information via an agent</p>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="text-green-600 font-bold mt-1">✓</span>
-              <p className="text-gray-700">An agent would reach out to you soon</p>
-            </div>
-          </div>
-        </div>
 
-        {/* Order Details Card */}
-        <div className="bg-gray-50 rounded-lg border border-gray-200 p-8 mb-8">
-          <div className="grid grid-cols-2 gap-8 mb-8">
+          {/* Order Header */}
+          <div className="grid grid-cols-2 gap-4 text-sm border-b border-gray-300 pb-3">
             <div>
-              <p className="text-sm text-gray-600 mb-1">Order Number</p>
-              <p className="text-lg font-semibold text-gray-900">{order.id.slice(0, 8).toUpperCase()}</p>
+              <p className="text-gray-600 text-xs font-semibold">ORDER NUMBER</p>
+              <p className="font-bold text-gray-900 text-sm">{order.id.slice(0, 8).toUpperCase()}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-gray-600 text-xs font-semibold">DATE</p>
+              <p className="font-bold text-gray-900 text-sm">{new Date(order.created_at).toLocaleDateString()}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600 mb-1">Order Date</p>
-              <p className="text-lg font-semibold text-gray-900">
-                {new Date(order.created_at).toLocaleDateString()}
-              </p>
+              <p className="text-gray-600 text-xs font-semibold">STATUS</p>
+              <p className="font-bold text-green-600 capitalize text-sm">{order.status}</p>
             </div>
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Status</p>
-              <p className="text-lg font-semibold text-green-600 capitalize">
-                {order.status}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Total Amount</p>
-              <p className="text-lg font-semibold text-amber-600">
-                {formatPrice(order.total_amount)}
-              </p>
+            <div className="text-right">
+              <p className="text-gray-600 text-xs font-semibold">TOTAL</p>
+              <p className="font-bold text-amber-600 text-sm">{formatPrice(order.total_amount)}</p>
             </div>
           </div>
 
-          {/* Items */}
-          <div className="border-t border-gray-200 pt-6">
-            <h2 className="font-semibold text-gray-900 mb-4">Order Items</h2>
-            <div className="space-y-4">
-              {orderItems.map((item) => (
-                <div key={item.id} className="flex justify-between items-start">
-                  <div>
-                    <p className="font-medium text-gray-900">
-                      {item.products?.name}
-                    </p>
-                    <div className="text-sm text-gray-600 mt-1">
-                      <p>Color: {item.product_colors?.color_name}</p>
-                      <p>Length: {item.product_quantities?.length_inches}"</p>
-                      <p>Quantity: {item.quantity}</p>
+          {/* Order Items */}
+          <div className="text-xs">
+            <p className="font-semibold text-gray-900 mb-2">ORDER ITEMS</p>
+            <div className="space-y-1">
+              {orderItems && orderItems.length > 0 ? (
+                orderItems.map((item) => {
+                  // Handle both array and object responses from Supabase relations
+                  const product = Array.isArray(item.products) ? item.products[0] : item.products
+                  const color = Array.isArray(item.product_colors) ? item.product_colors[0] : item.product_colors
+                  const quantity_data = Array.isArray(item.product_quantities) ? item.product_quantities[0] : item.product_quantities
+
+                  return (
+                    <div key={item.id} className="flex justify-between items-start py-1 border-b border-gray-200 last:border-0">
+                      <div className="flex-1 pr-2">
+                        <p className="font-medium text-gray-900">{product?.name || 'Product'}</p>
+                        <p className="text-gray-600">Color: {color?.color_name || 'N/A'} | Length: {quantity_data?.length_inches || 'N/A'}" | Qty: {item.quantity}</p>
+                      </div>
+                      <p className="font-semibold text-gray-900 whitespace-nowrap">
+                        {formatPrice((product?.price || 0) * (item.quantity || 1))}
+                      </p>
                     </div>
-                  </div>
-                  <p className="font-semibold text-gray-900">
-                    {formatPrice(item.price * item.quantity)}
-                  </p>
-                </div>
-              ))}
+                  )
+                })
+              ) : (
+                <p className="text-gray-500">No items found</p>
+              )}
             </div>
+          </div>
+
+          {/* Totals */}
+          <div className="border-t-2 border-gray-300 pt-2 text-sm font-bold flex justify-between">
+            <span>TOTAL:</span>
+            <span className="text-amber-600 text-base">{formatPrice(order.total_amount)}</span>
+          </div>
+
+          {/* Footer */}
+          <div className="text-center text-xs text-gray-600 border-t border-gray-300 pt-2">
+            <p>Thank you for your purchase!</p>
+            <p>Contact: +233 542 426 135 | Accra, Ghana</p>
           </div>
         </div>
 
-        {/* Next Steps */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-          <h3 className="font-semibold text-blue-900 mb-3">What&apos;s Next?</h3>
-          <ul className="space-y-2 text-sm text-blue-800">
+        {/* Next Steps - Only on screen */}
+        <div className="no-print mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+          <h3 className="font-semibold text-blue-900 mb-2">What's Next?</h3>
+          <ul className="space-y-1 text-blue-800 text-sm">
             <li>✓ Your order has been confirmed</li>
-            <li>✓ A confirmation email has been sent to your inbox</li>
-            <li>✓ Your hair extensions will be shipped within 2-3 business days</li>
-            <li>✓ You&apos;ll receive tracking information via email</li>
+            <li>✓ A confirmation email has been sent</li>
+            <li>✓ Your hair extensions will be processed within 2-3 business days</li>
+            <li>✓ You'll receive delivery updates via phone call</li>
           </ul>
-        </div>
-
-        {/* Actions */}
-        <div className="no-print flex flex-col sm:flex-row gap-4 justify-center mt-8 mb-8">
-          <Button
-            onClick={handlePrint}
-            className="bg-blue-600 hover:bg-blue-700 text-white py-3 flex items-center justify-center gap-2"
-          >
-            <Printer className="w-5 h-5" />
-            Print Receipt
-          </Button>
-          <Button
-            asChild
-            className="bg-amber-600 hover:bg-amber-700 text-white py-3"
-          >
-            <Link href="/">Continue Shopping</Link>
-          </Button>
-          <Button
-            variant="outline"
-            asChild
-            className="py-3"
-          >
-            <Link href="/">Back to Home</Link>
-          </Button>
-        </div>
-
-        {/* Contact Info */}
-        <div className="no-print text-center mt-12 pt-8 border-t border-gray-200">
-          <p className="text-gray-600 text-sm">
-            Have questions? Contact us at{' '}
-            <a
-              href="mailto:support@auraluxe.com"
-              className="text-amber-600 hover:text-amber-700"
-            >
-              support@auraluxe.com
-            </a>
-          </p>
         </div>
       </div>
     </main>
