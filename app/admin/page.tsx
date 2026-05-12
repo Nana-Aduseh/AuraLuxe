@@ -17,7 +17,7 @@ export default function AdminPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [authChecked, setAuthChecked] = useState(false)
-  const [activeTab, setActiveTab] = useState<Tab>('products')
+  const [activeTab, setActiveTab] = useState<Tab>('orders')
   const supabase = createClient()
   const router = useRouter()
 
@@ -114,16 +114,6 @@ export default function AdminPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex gap-8">
             <button
-              onClick={() => setActiveTab('products')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'products'
-                  ? 'border-amber-600 text-amber-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
-              }`}
-            >
-              Products
-            </button>
-            <button
               onClick={() => setActiveTab('orders')}
               className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === 'orders'
@@ -132,6 +122,16 @@ export default function AdminPage() {
               }`}
             >
               Orders
+            </button>
+            <button
+              onClick={() => setActiveTab('products')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'products'
+                  ? 'border-amber-600 text-amber-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              Products
             </button>
             <button
               onClick={() => setActiveTab('users')}
@@ -149,8 +149,8 @@ export default function AdminPage() {
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'products' && <AdminProducts />}
         {activeTab === 'orders' && <AdminOrders />}
+        {activeTab === 'products' && <AdminProducts />}
         {activeTab === 'users' && <AdminUsers />}
       </div>
     </main>

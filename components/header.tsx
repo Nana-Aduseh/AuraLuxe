@@ -167,6 +167,11 @@ export default function Header({ onSearch }: HeaderProps) {
             <Link href="/about" className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm">
               About
             </Link>
+            {user && (
+              <Link href="/orders" className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm">
+                Orders
+              </Link>
+            )}
           </nav>
 
           {/* Right Section */}
@@ -296,6 +301,15 @@ export default function Header({ onSearch }: HeaderProps) {
               >
                 About
               </Link>
+              {user && (
+                <Link
+                  href="/orders"
+                  className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm px-4 py-2 rounded hover:bg-muted"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Orders
+                </Link>
+              )}
               {isAdmin && (
                 <Link
                   href="/admin"

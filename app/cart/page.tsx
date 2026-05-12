@@ -73,6 +73,7 @@ export default function CartPage() {
 
   useEffect(() => {
     let channel: any = null
+    let isSubscribed = false
 
     const initializeCart = async () => {
       const {
@@ -88,29 +89,36 @@ export default function CartPage() {
       await loadCart(user.id)
       setLoading(false)
 
-      // Set up real-time listener for cart changes - MUST call .on() before .subscribe()
-      channel = supabase
-        .channel(`cart-page-${user.id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'cart_items',
-            filter: `user_id=eq.${user.id}`,
-          },
-          async () => {
-            // Reload cart when items change
-            await loadCart(user.id)
-          }
-        )
-        .subscribe()
+      // Set up real-time listener for cart changes
+      // Make sure to call .on() BEFORE .subscribe()
+      if (!isSubscribed) {
+        channel = supabase
+          .channel(`cart-page-${user.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'cart_items',
+              filter: `user_id=eq.${user.id}`,
+            },
+            async () => {
+              // Reload cart when items change
+              await loadCart(user.id)
+            }
+          )
+          .subscribe((status: string) => {
+            if (status === 'SUBSCRIBED') {
+              isSubscribed = true
+            }
+          })
+      }
     }
 
     initializeCart()
 
     return () => {
-      if (channel) {
+      if (channel && isSubscribed) {
         supabase.removeChannel(channel)
       }
     }

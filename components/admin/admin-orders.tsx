@@ -45,12 +45,12 @@ export default function AdminOrders() {
       .from('orders')
       .select(`
         *,
-        order_items!inner (
+        order_items (
           id,
           product_id,
-          quantity_ordered,
-          price_at_purchase,
-          products(name),
+          quantity,
+          price,
+          products(id, name),
           product_colors(color_name)
         )
       `)
@@ -79,8 +79,8 @@ export default function AdminOrders() {
         const items: OrderItem[] = (order.order_items || []).map((item: any) => ({
           id: item.id,
           product_id: item.product_id,
-          quantity_ordered: item.quantity_ordered,
-          price_at_purchase: item.price_at_purchase,
+          quantity_ordered: item.quantity,
+          price_at_purchase: item.price,
           product_name: Array.isArray(item.products) ? item.products[0]?.name : item.products?.name,
           color_name: Array.isArray(item.product_colors) ? item.product_colors[0]?.color_name : item.product_colors?.color_name,
         }))

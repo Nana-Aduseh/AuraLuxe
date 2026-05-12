@@ -8,6 +8,7 @@ import { formatPrice } from '@/lib/currency'
 import { X, ShoppingCart, Bolt } from 'lucide-react'
 import { Product, ProductColor, ProductQuantity, addToCart } from '@/lib/api'
 import { createClient } from '@/lib/supabase/client'
+import { toast } from 'sonner'
 
 interface ProductModalProps {
   product: Product
@@ -50,18 +51,21 @@ export default function ProductModal({
     const availableStock = selectedQtyData?.stock_quantity || 0
 
     if (quantity > availableStock) {
-      alert(`Sorry, only ${availableStock} ${availableStock === 1 ? 'piece' : 'pieces'} available for this selection.`)
+      toast.error(
+        `Sorry, only ${availableStock} ${availableStock === 1 ? 'piece' : 'pieces'} available for this selection.`
+      )
       return
     }
 
     setLoading(true)
     try {
       await addToCart(user.id, product.id, selectedColor, selectedQuantity, quantity)
-      onAddedToCart?.()
-      onClose()
+      toast.success('Added to cart successfully! 🛍️')
+      // Don't close the modal - keep it open so user can order different colors
+      setQuantity(1) // Reset quantity for next order
     } catch (error) {
       console.error('Error adding to cart:', error)
-      alert('Failed to add to cart. Please try again.')
+      toast.error('Failed to add to cart. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -82,7 +86,9 @@ export default function ProductModal({
     const availableStock = selectedQtyData?.stock_quantity || 0
 
     if (quantity > availableStock) {
-      alert(`Sorry, only ${availableStock} ${availableStock === 1 ? 'piece' : 'pieces'} available for this selection.`)
+      toast.error(
+        `Sorry, only ${availableStock} ${availableStock === 1 ? 'piece' : 'pieces'} available for this selection.`
+      )
       return
     }
 
@@ -93,7 +99,7 @@ export default function ProductModal({
       router.push('/checkout')
     } catch (error) {
       console.error('Error:', error)
-      alert('Failed to proceed. Please try again.')
+      toast.error('Failed to proceed. Please try again.')
     } finally {
       setLoading(false)
     }
