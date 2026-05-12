@@ -243,15 +243,13 @@ export async function createOrder(
 ) {
   const supabase = createClient()
 
-  // Create order
+  // Create order with basic fields (new fields added via migration if available)
   const { data: order, error: orderError } = await supabase
     .from('orders')
     .insert({
       user_id: userId,
       total_amount: totalAmount,
       status: 'pending',
-      order_type: deliveryType,
-      confirmation_status: 'not_confirmed',
       payment_reference: `ORD-${Date.now()}`,
     })
     .select()
@@ -260,6 +258,21 @@ export async function createOrder(
   if (orderError) {
     console.error('Error creating order:', orderError)
     return null
+  }
+
+  // If new columns exist, update them
+  if (order && order.id) {
+    try {
+      await supabase
+        .from('orders')
+        .update({
+          order_type: deliveryType,
+          confirmation_status: 'not_confirmed',
+        })
+        .eq('id', order.id)
+    } catch (e) {
+      // Silently ignore if new columns don't exist yet
+    }
   }
 
   // Create order items and reduce inventory

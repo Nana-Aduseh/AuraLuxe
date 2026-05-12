@@ -30,6 +30,7 @@ export default function CheckoutPage() {
   const [town, setTown] = useState('')
   const [region, setRegion] = useState('')
   const [phone, setPhone] = useState('')
+  const [isEditingAddress, setIsEditingAddress] = useState(false)
 
   // Payment form states
   const [cardName, setCardName] = useState('')
@@ -60,7 +61,7 @@ export default function CheckoutPage() {
 
       if (address) {
         setSavedAddress(address)
-        setUseSavedAddress(true)
+        // Auto-load saved address
         setFirstName(address.first_name)
         setLastName(address.last_name)
         setEmail(address.email)
@@ -68,6 +69,10 @@ export default function CheckoutPage() {
         setTown(address.town)
         setRegion(address.region)
         setPhone(address.phone || '')
+        setUseSavedAddress(true)
+        setIsEditingAddress(false)
+      } else {
+        setUseSavedAddress(false)
       }
 
       const cart = await getCart(user.id)
@@ -90,7 +95,7 @@ export default function CheckoutPage() {
   }, 0)
 
   const handleUseSavedAddress = () => {
-    if (!useSavedAddress && savedAddress) {
+    if (savedAddress) {
       setFirstName(savedAddress.first_name)
       setLastName(savedAddress.last_name)
       setEmail(savedAddress.email)
@@ -98,6 +103,36 @@ export default function CheckoutPage() {
       setTown(savedAddress.town)
       setRegion(savedAddress.region)
       setPhone(savedAddress.phone || '')
+      setUseSavedAddress(true)
+      setIsEditingAddress(false)
+    }
+  }
+
+  const handleEditAddress = () => {
+    setIsEditingAddress(true)
+  }
+
+  const handleSaveAsDefault = async () => {
+    if (user && deliveryType === 'delivery') {
+      await supabase.from('user_addresses').upsert({
+        user_id: user.id,
+        first_name: firstName,
+        last_name: lastName,
+        email: email,
+        address: address,
+        town: town,
+        region: region,
+        phone: phone,
+      })
+      const { data: updatedAddress } = await supabase
+        .from('user_addresses')
+        .select('*')
+        .eq('user_id', user.id)
+        .single()
+      if (updatedAddress) {
+        setSavedAddress(updatedAddress)
+        setIsEditingAddress(false)
+      }
     }
   }
 
@@ -127,18 +162,9 @@ export default function CheckoutPage() {
       return
     }
 
-    // Save address for future use (only for delivery)
-    if (user && deliveryType === 'delivery' && !useSavedAddress) {
-      await supabase.from('user_addresses').upsert({
-        user_id: user.id,
-        first_name: firstName,
-        last_name: lastName,
-        email: email,
-        address: address,
-        town: town,
-        region: region,
-        phone: phone,
-      })
+    // Save address if it's different from saved one
+    if (user && deliveryType === 'delivery' && isEditingAddress) {
+      await handleSaveAsDefault()
     }
 
     setShowPayment(true)
@@ -217,32 +243,27 @@ export default function CheckoutPage() {
                   Order Information
                 </h2>
 
-                {/* Use Saved Address Option */}
-                {savedAddress && (
+                {/* Saved Address Display */}
+                {savedAddress && !isEditingAddress && (
                   <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={useSavedAddress}
-                        onChange={(e) => {
-                          setUseSavedAddress(e.target.checked)
-                          if (e.target.checked) {
-                            handleUseSavedAddress()
-                          }
-                        }}
-                        className="w-4 h-4"
-                      />
-                      <span className="text-sm font-medium text-gray-700">
-                        Use my saved delivery address
-                      </span>
-                    </label>
-                    {useSavedAddress && (
-                      <div className="mt-2 text-sm text-gray-600">
-                        <p>{savedAddress.first_name} {savedAddress.last_name}</p>
-                        <p>{savedAddress.address}</p>
-                        <p>{savedAddress.town}, {savedAddress.region}</p>
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">Saved Delivery Address</p>
+                        <div className="mt-2 text-sm text-gray-700 space-y-1">
+                          <p>{firstName} {lastName}</p>
+                          <p>{address}</p>
+                          <p>{town}, {region}</p>
+                          <p className="text-gray-600">Phone: {phone}</p>
+                        </div>
                       </div>
-                    )}
+                      <button
+                        type="button"
+                        onClick={handleEditAddress}
+                        className="text-blue-600 hover:text-blue-700 text-sm font-medium whitespace-nowrap ml-4"
+                      >
+                        Edit
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -278,23 +299,49 @@ export default function CheckoutPage() {
                     </div>
                   </div>
 
-                  {/* Phone Number */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Phone Number *
-                    </label>
-                    <Input
-                      type="tel"
-                      value={phone}
-                      onChange={handlePhoneChange}
-                      placeholder="0240000000"
-                      maxLength={10}
-                      required
-                    />
-                  </div>
+                  {/* Saved Address Display */}
+                  {savedAddress && !isEditingAddress && deliveryType === 'delivery' && (
+                    <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Delivery Address</p>
+                          <div className="mt-2 text-sm text-gray-700 space-y-1">
+                            <p>{firstName} {lastName}</p>
+                            <p>{address}</p>
+                            <p>{town}, {region}</p>
+                            <p className="text-gray-600">Phone: {phone}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleEditAddress}
+                          className="text-blue-600 hover:text-blue-700 text-sm font-medium whitespace-nowrap ml-4"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-                  {/* Delivery Address Fields - Only show if delivery is selected */}
-                  {deliveryType === 'delivery' && (
+                  {/* Phone Number - Always show */}
+                  {(isEditingAddress || !savedAddress || deliveryType === 'pickup') && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Phone Number *
+                      </label>
+                      <Input
+                        type="tel"
+                        value={phone}
+                        onChange={handlePhoneChange}
+                        placeholder="0240000000"
+                        maxLength={10}
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {/* Delivery Address Fields - Show when editing or no saved address */}
+                  {deliveryType === 'delivery' && (isEditingAddress || !savedAddress) && (
                     <>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -491,7 +538,7 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Shipping</span>
-                  <span>Free</span>
+                  <span>To be determined</span>
                 </div>
               </div>
 
