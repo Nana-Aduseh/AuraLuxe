@@ -56,6 +56,19 @@ export default function OrderConfirmationPage() {
 
       if (itemsData) {
         console.log('Order items data:', itemsData)
+        console.log('Item count:', itemsData.length)
+        
+        // Log each item to see which fields are present
+        itemsData.forEach((item, index) => {
+          console.log(`Item ${index}:`, {
+            id: item.id,
+            product_id: item.product_id,
+            color_id: item.color_id,
+            quantity_id: item.quantity_id,
+            quantity: item.quantity,
+            price: item.price,
+          })
+        })
         
         // Load product details for each item
         const enrichedItems = await Promise.all(
@@ -69,6 +82,7 @@ export default function OrderConfirmationPage() {
                 .single()
 
               if (productError) console.error('Error loading product:', productError)
+              else console.log(`Product loaded for item ${item.product_id}:`, productData)
 
               // Load color if color_id exists
               let colorData = null
@@ -80,7 +94,10 @@ export default function OrderConfirmationPage() {
                   .single()
 
                 if (colorError) console.warn('Error loading color:', colorError)
-                else colorData = colorRes
+                else {
+                  colorData = colorRes
+                  console.log(`Color loaded for item ${item.color_id}:`, colorData)
+                }
               }
 
               // Load quantity if quantity_id exists
@@ -93,7 +110,10 @@ export default function OrderConfirmationPage() {
                   .single()
 
                 if (quantityError) console.warn('Error loading quantity:', quantityError)
-                else quantityData = quantityRes
+                else {
+                  quantityData = quantityRes
+                  console.log(`Quantity loaded for item ${item.quantity_id}:`, quantityData)
+                }
               }
 
               return {

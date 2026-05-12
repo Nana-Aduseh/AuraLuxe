@@ -242,6 +242,9 @@ export async function createOrder(
   deliveryType: 'delivery' | 'pickup' = 'delivery'
 ) {
   const supabase = createClient()
+  
+  console.log('Creating order with', cartItems.length, 'items')
+  console.log('Cart items:', cartItems)
 
   // Create order with basic fields (new fields added via migration if available)
   const { data: order, error: orderError } = await supabase
@@ -277,14 +280,27 @@ export async function createOrder(
 
   // Create order items and reduce inventory
   const orderItemsPromises = cartItems.map(async (item) => {
-    await supabase.from('order_items').insert({
-      order_id: order.id,
+    console.log('Creating order item:', {
+      order_id: order?.id,
       product_id: item.product_id,
       color_id: item.color_id,
       quantity_id: item.quantity_id,
       quantity: item.quantity_ordered,
       price: item.product?.price || 0,
     })
+    
+    const { error: itemError } = await supabase.from('order_items').insert({
+      order_id: order?.id,
+      product_id: item.product_id,
+      color_id: item.color_id,
+      quantity_id: item.quantity_id,
+      quantity: item.quantity_ordered,
+      price: item.product?.price || 0,
+    })
+    
+    if (itemError) {
+      console.error('Error creating order item:', itemError)
+    }
 
     // Reduce stock
     if (item.quantity_id) {
