@@ -10,6 +10,25 @@ import Link from 'next/link'
 import { getCart, createOrder, CartItem } from '@/lib/api'
 import { createClient } from '@/lib/supabase/client'
 
+const GHANA_REGIONS = [
+  'Ahafo',
+  'Ashanti',
+  'Bono',
+  'Bono East',
+  'Central',
+  'Eastern',
+  'Greater Accra',
+  'North East',
+  'Northern',
+  'Oti',
+  'Savannah',
+  'Upper East',
+  'Upper West',
+  'Volta',
+  'Western',
+  'Western North',
+]
+
 export default function CheckoutPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -137,13 +156,28 @@ export default function CheckoutPage() {
   }
 
   const formatPhoneNumber = (value: string) => {
-    // Remove all non-digits
     const digitsOnly = value.replace(/\D/g, '')
-    // Format as 0XXXXXXXXX (10 digits)
-    if (digitsOnly.length <= 10) {
-      return digitsOnly
+    if (!digitsOnly) {
+      return ''
     }
-    return digitsOnly.slice(0, 10)
+
+    let localDigits = digitsOnly
+
+    if (localDigits.startsWith('233')) {
+      localDigits = localDigits.slice(3)
+    }
+
+    if (localDigits.startsWith('0')) {
+      localDigits = localDigits.slice(1)
+    }
+
+    localDigits = localDigits.slice(0, 9)
+
+    if (!localDigits) {
+      return ''
+    }
+
+    return `+233${localDigits}`
   }
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -333,8 +367,8 @@ export default function CheckoutPage() {
                         type="tel"
                         value={phone}
                         onChange={handlePhoneChange}
-                        placeholder="0240000000"
-                        maxLength={10}
+                        placeholder="+233240000000"
+                        maxLength={13}
                         required
                       />
                     </div>
@@ -371,12 +405,19 @@ export default function CheckoutPage() {
                           <label className="block text-sm font-medium text-gray-700 mb-2">
                             Region *
                           </label>
-                          <Input
+                          <select
                             value={region}
                             onChange={(e) => setRegion(e.target.value)}
-                            placeholder="State/Region"
+                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
                             required
-                          />
+                          >
+                            <option value="">Select region</option>
+                            {GHANA_REGIONS.map((ghanaRegion) => (
+                              <option key={ghanaRegion} value={ghanaRegion}>
+                                {ghanaRegion}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     </>

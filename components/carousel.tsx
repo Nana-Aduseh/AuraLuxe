@@ -68,7 +68,7 @@ export default function Carousel({
   )
 
   return (
-    <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-primary/5 via-background to-accent/5 border-y border-border/30">
+    <section className="py-16 px-4 sm:px-6 lg:px-8 bg-background border-y border-border/20">
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-10">
           <h2 

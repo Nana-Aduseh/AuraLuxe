@@ -24,15 +24,6 @@ export default function ProductCard({ product }: ProductCardProps) {
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-        {product.is_newest ? (
-          <div className="absolute top-4 left-4 bg-accent text-white px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider">
-            New
-          </div>
-        ) : product.is_trending && (
-          <div className="absolute top-4 right-4 bg-primary text-white px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider">
-            Trending
-          </div>
-        )}
       </div>
 
       <div className="p-3 md:p-6">

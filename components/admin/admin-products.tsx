@@ -20,7 +20,6 @@ interface ProductColorForm {
 interface ProductQuantityForm {
   id?: string
   length_inches: string
-  weight_grams: string
   stock_quantity: string
 }
 
@@ -52,7 +51,6 @@ function createEmptyColor(): ProductColorForm {
 function createEmptyQuantity(): ProductQuantityForm {
   return {
     length_inches: '',
-    weight_grams: '',
     stock_quantity: '',
   }
 }
@@ -287,12 +285,11 @@ export default function AdminProducts() {
     const validQuantities = formData.quantities.filter(
       (quantity) =>
         quantity.length_inches.trim() &&
-        quantity.weight_grams.trim() &&
         quantity.stock_quantity.trim()
     )
 
     if (validQuantities.length === 0) {
-      alert('Please add at least one inventory row with length, weight, and stock.')
+      alert('Please add at least one inventory row with length and stock.')
       return false
     }
 
@@ -398,7 +395,6 @@ export default function AdminProducts() {
     const validQuantities = formData.quantities.filter(
       (quantity) =>
         quantity.length_inches.trim() &&
-        quantity.weight_grams.trim() &&
         quantity.stock_quantity.trim()
     )
 
@@ -413,7 +409,7 @@ export default function AdminProducts() {
       const payload = {
         product_id: productId,
         length_inches: Number(quantity.length_inches),
-        weight_grams: Number(quantity.weight_grams),
+        weight_grams: 0,
         stock_quantity: Number(quantity.stock_quantity),
       }
 
@@ -768,7 +764,7 @@ export default function AdminProducts() {
               <div>
                 <h4 className="font-semibold text-gray-900">Lengths and Stock</h4>
                 <p className="text-sm text-gray-600">
-                  Add each sellable length with its weight and available quantity.
+                  Add each sellable length with its available quantity.
                 </p>
               </div>
               <Button onClick={addQuantity} type="button" variant="outline">
@@ -781,7 +777,7 @@ export default function AdminProducts() {
               {formData.quantities.map((quantity, index) => (
                 <div
                   key={quantity.id || `quantity-${index}`}
-                  className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_110px] gap-4 items-end border border-gray-200 rounded-lg p-4"
+                  className="grid grid-cols-1 md:grid-cols-[1fr_1fr_110px] gap-4 items-end border border-gray-200 rounded-lg p-4"
                 >
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -794,19 +790,6 @@ export default function AdminProducts() {
                         updateQuantity(index, 'length_inches', event.target.value)
                       }
                       placeholder="18"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Weight (grams)
-                    </label>
-                    <Input
-                      type="number"
-                      value={quantity.weight_grams}
-                      onChange={(event) =>
-                        updateQuantity(index, 'weight_grams', event.target.value)
-                      }
-                      placeholder="100"
                     />
                   </div>
                   <div>

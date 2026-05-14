@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
@@ -34,7 +34,40 @@ export default function ProductModal({
   )
   const [quantity, setQuantity] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [displayImageUrl, setDisplayImageUrl] = useState(
+    colors[0]?.image_url || product.image_url || ''
+  )
   const supabase = createClient()
+
+  const selectedQtyData = quantities.find((q) => q.id === selectedQuantity)
+  const selectedColorData = colors.find((c) => c.id === selectedColor)
+
+  useEffect(() => {
+    const preloadUrls = [product.image_url, ...colors.map((color) => color.image_url)]
+      .filter((url): url is string => Boolean(url))
+
+    preloadUrls.forEach((url) => {
+      const image = new window.Image()
+      image.src = url
+    })
+  }, [colors, product.image_url])
+
+  useEffect(() => {
+    const nextUrl = selectedColorData?.image_url || product.image_url || ''
+
+    if (!nextUrl || nextUrl === displayImageUrl) {
+      if (!nextUrl) {
+        setDisplayImageUrl('')
+      }
+      return
+    }
+
+    const image = new window.Image()
+    image.src = nextUrl
+    image.onload = () => {
+      setDisplayImageUrl(nextUrl)
+    }
+  }, [displayImageUrl, product.image_url, selectedColorData?.image_url])
 
   const handleAddToCart = async () => {
     const {
@@ -105,10 +138,6 @@ export default function ProductModal({
     }
   }
 
-  const selectedQtyData = quantities.find((q) => q.id === selectedQuantity)
-  const selectedColorData = colors.find((c) => c.id === selectedColor)
-  const displayImageUrl = selectedColorData?.image_url || product.image_url
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -171,7 +200,7 @@ export default function ProductModal({
             <div className="flex flex-col">
               <div className="mb-6">
                 <p className="text-gray-600 mb-4">{product.description}</p>
-                
+
                 {/* Simplified Price Display */}
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
                   <div className="text-sm text-gray-600 mb-2">

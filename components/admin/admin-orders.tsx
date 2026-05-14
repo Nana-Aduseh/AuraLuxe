@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { formatPrice } from '@/lib/currency'
 
 interface OrderWithDetails {
@@ -33,7 +32,6 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true)
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null)
   const [filterTab, setFilterTab] = useState<'all' | 'pending' | 'confirmed' | 'shipped'>('all')
-  const supabase = createClient()
 
   useEffect(() => {
     loadOrders()
@@ -42,73 +40,30 @@ export default function AdminOrders() {
   const loadOrders = async () => {
     setLoading(true)
     try {
-      // First try a simple query without relations
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false })
+      const response = await fetch('/api/admin/orders', {
+        cache: 'no-store',
+      })
 
-      if (error) {
-        console.error('Error loading orders:', error)
+      if (response.status === 401 || response.status === 403) {
+        console.error('Unauthorized admin order request')
         setLoading(false)
         return
       }
 
+      const payload = await response.json()
+
+      if (!response.ok) {
+        console.error('Error loading orders:', payload?.error)
+        setLoading(false)
+        return
+      }
+
+      const data = payload.orders as OrderWithDetails[]
+
       console.log('Orders loaded:', data)
 
       if (data) {
-        // Load order items separately for each order
-        const enrichedOrders = await Promise.all(
-          data.map(async (order: any) => {
-            const { data: items, error: itemsError } = await supabase
-              .from('order_items')
-              .select('*')
-              .eq('order_id', order.id)
-
-            if (itemsError) {
-              console.error(`Error loading items for order ${order.id}:`, itemsError)
-            }
-
-            console.log(`Items for order ${order.id}:`, items)
-
-            return {
-              ...order,
-              order_items: items || [],
-            }
-          })
-        )
-
-        // Load user profiles for each order
-        const orderIds = enrichedOrders.map((order: any) => order.user_id)
-        const uniqueUserIds = [...new Set(orderIds)]
-
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, name, email')
-          .in('id', uniqueUserIds)
-
-        const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]))
-
-        const finalOrders: OrderWithDetails[] = enrichedOrders.map((order: any) => {
-          const profile = profileMap.get(order.user_id)
-          const items: OrderItem[] = (order.order_items || []).map((item: any) => ({
-            id: item.id,
-            product_id: item.product_id,
-            quantity_ordered: item.quantity,
-            price_at_purchase: item.price,
-            product_name: 'Unknown Product',
-            color_name: 'Unknown',
-          }))
-
-          return {
-            ...order,
-            user_name: profile?.name || 'Unknown',
-            user_email: profile?.email || 'Unknown',
-            order_items: items,
-          }
-        })
-
-        setOrders(finalOrders)
+        setOrders(data)
       }
     } catch (err) {
       console.error('Exception in loadOrders:', err)
@@ -117,10 +72,9 @@ export default function AdminOrders() {
   }
 
   const handleConfirmationStatusUpdate = async (orderId: string, newStatus: string) => {
-    const { error } = await supabase
-      .from('orders')
-      .update({ confirmation_status: newStatus })
-      .eq('id', orderId)
+    const { createClient } = await import('@/lib/supabase/client')
+    const supabase = createClient()
+    const { error } = await supabase.from('orders').update({ confirmation_status: newStatus }).eq('id', orderId)
 
     if (!error) {
       loadOrders()
@@ -130,10 +84,9 @@ export default function AdminOrders() {
   }
 
   const handleDeliveryStatusUpdate = async (orderId: string, newStatus: string) => {
-    const { error } = await supabase
-      .from('orders')
-      .update({ delivery_status: newStatus })
-      .eq('id', orderId)
+    const { createClient } = await import('@/lib/supabase/client')
+    const supabase = createClient()
+    const { error } = await supabase.from('orders').update({ delivery_status: newStatus }).eq('id', orderId)
 
     if (!error) {
       loadOrders()
@@ -143,22 +96,11 @@ export default function AdminOrders() {
   }
 
   const filteredOrders = orders.filter((order) => {
-    const matches = {
-      all: true,
-      pending: order.confirmation_status === 'not_confirmed',
-      confirmed: order.confirmation_status === 'confirmed',
-      shipped: order.delivery_status === 'sent' || order.delivery_status === 'received',
-    }
-    
-    const result = filterTab === 'all' ? true :
-                   filterTab === 'pending' ? order.confirmation_status === 'not_confirmed' :
-                   filterTab === 'confirmed' ? order.confirmation_status === 'confirmed' :
-                   filterTab === 'shipped' ? (order.delivery_status === 'sent' || order.delivery_status === 'received') :
-                   true
-    
-    console.log(`Filter check - Tab: ${filterTab}, Order: ${order.id}, Confirmation: ${order.confirmation_status}, Delivery: ${order.delivery_status}, Matches:`, matches, 'Result:', result)
-    
-    return result
+    if (filterTab === 'all') return true
+    if (filterTab === 'pending') return order.confirmation_status === 'not_confirmed'
+    if (filterTab === 'confirmed') return order.confirmation_status === 'confirmed'
+    if (filterTab === 'shipped') return order.delivery_status === 'sent' || order.delivery_status === 'received'
+    return true
   })
 
   if (loading) {
@@ -177,7 +119,6 @@ export default function AdminOrders() {
       <div className="flex gap-2 mb-6 flex-wrap">
         <button
           onClick={() => {
-            console.log('Clicking pending tab, current filterTab:', filterTab)
             setFilterTab('all')
           }}
           className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
@@ -190,7 +131,6 @@ export default function AdminOrders() {
         </button>
         <button
           onClick={() => {
-            console.log('Clicking pending tab, current filterTab:', filterTab)
             setFilterTab('pending')
           }}
           className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
@@ -203,7 +143,6 @@ export default function AdminOrders() {
         </button>
         <button
           onClick={() => {
-            console.log('Clicking confirmed tab, current filterTab:', filterTab)
             setFilterTab('confirmed')
           }}
           className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
@@ -216,7 +155,6 @@ export default function AdminOrders() {
         </button>
         <button
           onClick={() => {
-            console.log('Clicking shipped tab, current filterTab:', filterTab)
             setFilterTab('shipped')
           }}
           className={`px-4 py-2 rounded-lg border font-medium transition-colors ${

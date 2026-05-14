@@ -164,14 +164,14 @@ export default function Header({ onSearch }: HeaderProps) {
             <Link href="/extensions" className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm">
               Extensions
             </Link>
-            <Link href="/about" className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm">
-              About
-            </Link>
             {user && (
               <Link href="/orders" className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm">
                 Orders
               </Link>
             )}
+            <Link href="/about" className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm">
+              About
+            </Link>
           </nav>
 
           {/* Right Section */}
@@ -274,13 +274,6 @@ export default function Header({ onSearch }: HeaderProps) {
               >
                 Extensions
               </Link>
-              <Link
-                href="/about"
-                className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm px-4 py-2 rounded hover:bg-muted"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                About
-              </Link>
               {user && (
                 <Link
                   href="/orders"
@@ -290,6 +283,13 @@ export default function Header({ onSearch }: HeaderProps) {
                   Orders
                 </Link>
               )}
+              <Link
+                href="/about"
+                className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm px-4 py-2 rounded hover:bg-muted"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                About
+              </Link>
               {isAdmin && (
                 <Link
                   href="/admin"
