@@ -1,150 +1,150 @@
-'use client'
+"use client";
 
-import Link from 'next/link'
-import { useEffect, useState } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { ShoppingCart, LogOut, Menu, X, ArrowLeft } from 'lucide-react'
-import { Input } from '@/components/ui/input'
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
+import { ShoppingCart, LogOut, Menu, X, ArrowLeft } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 interface HeaderProps {
-  onSearch?: (query: string) => void
+  onSearch?: (query: string) => void;
 }
 
 export default function Header({ onSearch }: HeaderProps) {
-  const [user, setUser] = useState<any>(null)
-  const [userProfile, setUserProfile] = useState<any>(null)
-  const [cartCount, setCartCount] = useState(0)
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const router = useRouter()
-  const pathname = usePathname()
-  const supabase = createClient()
-  const isHomePage = pathname === '/'
+  const [user, setUser] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [cartCount, setCartCount] = useState(0);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const router = useRouter();
+  const pathname = usePathname();
+  const supabase = createClient();
+  const isHomePage = pathname === "/";
 
   useEffect(() => {
     const getUser = async () => {
       const {
         data: { user },
-      } = await supabase.auth.getUser()
-      setUser(user)
+      } = await supabase.auth.getUser();
+      setUser(user);
 
       if (user) {
         // Load user profile
         const { data: profile } = await supabase
-          .from('profiles')
-          .select('name')
-          .eq('id', user.id)
-          .single()
+          .from("profiles")
+          .select("name")
+          .eq("id", user.id)
+          .single();
 
         if (profile) {
-          setUserProfile(profile)
+          setUserProfile(profile);
         }
 
-        const adminAccessPromise = fetch('/api/admin/access', {
-          method: 'GET',
-          cache: 'no-store',
+        const adminAccessPromise = fetch("/api/admin/access", {
+          method: "GET",
+          cache: "no-store",
         })
           .then(async (response) => {
             if (!response.ok) {
-              return false
+              return false;
             }
 
-            const payload = await response.json()
-            return payload.isAdmin === true
+            const payload = await response.json();
+            return payload.isAdmin === true;
           })
-          .catch(() => false)
+          .catch(() => false);
 
         const [{ data }, userIsAdmin] = await Promise.all([
           supabase
-            .from('cart_items')
-            .select('id', { count: 'exact' })
-            .eq('user_id', user.id),
+            .from("cart_items")
+            .select("id", { count: "exact" })
+            .eq("user_id", user.id),
           adminAccessPromise,
-        ])
+        ]);
 
-        setCartCount(data?.length || 0)
-        setIsAdmin(userIsAdmin)
+        setCartCount(data?.length || 0);
+        setIsAdmin(userIsAdmin);
       } else {
-        setCartCount(0)
-        setIsAdmin(false)
-        setUserProfile(null)
+        setCartCount(0);
+        setIsAdmin(false);
+        setUserProfile(null);
       }
 
-      setLoading(false)
-    }
+      setLoading(false);
+    };
 
-    getUser()
+    getUser();
 
     const {
       data: { subscription: authSubscription },
     } = supabase.auth.onAuthStateChange(() => {
-      getUser()
-    })
+      getUser();
+    });
 
     // Set up real-time listener for cart changes
-    let channel: any = null
-    
+    let channel: any = null;
+
     const setupCartListener = async () => {
       const {
         data: { user },
-      } = await supabase.auth.getUser()
-      
+      } = await supabase.auth.getUser();
+
       if (user) {
         channel = supabase
           .channel(`cart-changes-${user.id}`)
           .on(
-            'postgres_changes',
-            { 
-              event: '*', 
-              schema: 'public', 
-              table: 'cart_items',
-              filter: `user_id=eq.${user.id}`
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "cart_items",
+              filter: `user_id=eq.${user.id}`,
             },
             async () => {
               // Refetch cart count when changes occur
               const { data } = await supabase
-                .from('cart_items')
-                .select('id', { count: 'exact' })
-                .eq('user_id', user.id)
-              
-              setCartCount(data?.length || 0)
-            }
+                .from("cart_items")
+                .select("id", { count: "exact" })
+                .eq("user_id", user.id);
+
+              setCartCount(data?.length || 0);
+            },
           )
-          .subscribe()
+          .subscribe();
       }
-    }
-    
-    setupCartListener()
+    };
+
+    setupCartListener();
 
     return () => {
-      authSubscription.unsubscribe()
+      authSubscription.unsubscribe();
       if (channel) {
-        supabase.removeChannel(channel)
+        supabase.removeChannel(channel);
       }
-    }
-  }, [])
+    };
+  }, []);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    setUser(null)
-    setIsAdmin(false)
-    setCartCount(0)
-    router.push('/')
-    window.location.reload()
-  }
+    await supabase.auth.signOut();
+    setUser(null);
+    setIsAdmin(false);
+    setCartCount(0);
+    router.push("/");
+    window.location.reload();
+  };
 
   const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (searchQuery.trim()) {
-      router.push(`/extensions?search=${encodeURIComponent(searchQuery)}`)
-      setMobileMenuOpen(false)
-      setSearchQuery('')
+      router.push(`/extensions?search=${encodeURIComponent(searchQuery)}`);
+      setMobileMenuOpen(false);
+      setSearchQuery("");
     }
-  }
+  };
 
   return (
     <header className="sticky top-0 z-50 bg-card border-b border-border/30 shadow-md">
@@ -152,24 +152,42 @@ export default function Header({ onSearch }: HeaderProps) {
         <div className="flex justify-between items-center h-24">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 flex-shrink-0">
-            <img src="/aura-luxe-logo.png" alt="Aura Luxe" className="h-16 w-auto" />
-            <span className="font-semibold text-foreground text-xs sm:text-sm md:text-base">Aura Luxe</span>
+            <img
+              src="/aura-luxe-logo.png"
+              alt="Aura Luxe"
+              className="h-16 w-auto"
+            />
+            <span className="font-semibold text-foreground text-xs sm:text-sm md:text-base">
+              Aura Luxe
+            </span>
           </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex gap-8 items-center">
-            <Link href="/" className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm">
+            <Link
+              href="/"
+              className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm"
+            >
               Home
             </Link>
-            <Link href="/extensions" className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm">
+            <Link
+              href="/extensions"
+              className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm"
+            >
               Extensions
             </Link>
             {user && (
-              <Link href="/orders" className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm">
+              <Link
+                href="/orders"
+                className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm"
+              >
                 Orders
               </Link>
             )}
-            <Link href="/about" className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm">
+            <Link
+              href="/about"
+              className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm"
+            >
               About
             </Link>
           </nav>
@@ -212,7 +230,9 @@ export default function Header({ onSearch }: HeaderProps) {
                     className="text-foreground text-xs md:text-sm truncate max-w-[120px]"
                     title={userProfile?.name || user.email}
                   >
-                    {userProfile?.name ? userProfile.name.split(' ')[0] : user.email?.split('@')[0]}
+                    {userProfile?.name
+                      ? userProfile.name.split(" ")[0]
+                      : user.email?.split("@")[0]}
                   </Button>
                   <Button
                     variant="ghost"
@@ -224,7 +244,11 @@ export default function Header({ onSearch }: HeaderProps) {
                   </Button>
                 </>
               ) : (
-                <Button asChild size="sm" className="bg-primary hover:bg-primary/90">
+                <Button
+                  asChild
+                  size="sm"
+                  className="bg-primary hover:bg-primary/90"
+                >
                   <Link href="/auth/login">Sign In</Link>
                 </Button>
               )}
@@ -237,14 +261,18 @@ export default function Header({ onSearch }: HeaderProps) {
               className="lg:hidden"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {mobileMenuOpen ? (
+                <X className="w-5 h-5" />
+              ) : (
+                <Menu className="w-5 h-5" />
+              )}
             </Button>
           </div>
         </div>
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden pb-4 border-t border-border/20">
+          <div className="lg:hidden pb-4 border-t border-border/20">
             {/* Mobile Search */}
             <div className="py-3">
               <form onSubmit={handleSearch} className="px-4">
@@ -314,8 +342,8 @@ export default function Header({ onSearch }: HeaderProps) {
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      handleLogout()
-                      setMobileMenuOpen(false)
+                      handleLogout();
+                      setMobileMenuOpen(false);
                     }}
                     className="w-full"
                   >
@@ -324,8 +352,15 @@ export default function Header({ onSearch }: HeaderProps) {
                   </Button>
                 </div>
               ) : (
-                <Button asChild size="sm" className="w-full bg-primary hover:bg-primary/90">
-                  <Link href="/auth/login" onClick={() => setMobileMenuOpen(false)}>
+                <Button
+                  asChild
+                  size="sm"
+                  className="w-full bg-primary hover:bg-primary/90"
+                >
+                  <Link
+                    href="/auth/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
                     Sign In
                   </Link>
                 </Button>
@@ -335,5 +370,5 @@ export default function Header({ onSearch }: HeaderProps) {
         )}
       </div>
     </header>
-  )
+  );
 }

@@ -1,63 +1,63 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { formatPrice } from '@/lib/currency'
-import { CheckCircle, Printer, Mail } from 'lucide-react'
-import Link from 'next/link'
-import Image from 'next/image'
-import { createClient } from '@/lib/supabase/client'
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { formatPrice } from "@/lib/currency";
+import { CheckCircle, Printer, Mail } from "lucide-react";
+import Link from "next/link";
+import Image from "next/image";
+import { createClient } from "@/lib/supabase/client";
 
 export default function OrderConfirmationPage() {
-  const params = useParams()
-  const router = useRouter()
-  const [order, setOrder] = useState<any>(null)
-  const [orderItems, setOrderItems] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [emailSent, setEmailSent] = useState(false)
-  const supabase = createClient()
+  const params = useParams();
+  const router = useRouter();
+  const [order, setOrder] = useState<any>(null);
+  const [orderItems, setOrderItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [emailSent, setEmailSent] = useState(false);
+  const supabase = createClient();
 
-  const orderId = params.orderId as string
+  const orderId = params.orderId as string;
 
   useEffect(() => {
     const loadOrder = async () => {
       const {
         data: { user },
-      } = await supabase.auth.getUser()
+      } = await supabase.auth.getUser();
 
       if (!user) {
-        router.push('/auth/login')
-        return
+        router.push("/auth/login");
+        return;
       }
 
       const { data: orderData, error: orderError } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('id', orderId)
-        .eq('user_id', user.id)
-        .single()
+        .from("orders")
+        .select("*")
+        .eq("id", orderId)
+        .eq("user_id", user.id)
+        .single();
 
       if (orderError || !orderData) {
-        router.push('/')
-        return
+        router.push("/");
+        return;
       }
 
-      setOrder(orderData)
+      setOrder(orderData);
 
       const { data: itemsData, error: itemsError } = await supabase
-        .from('order_items')
-        .select('*')
-        .eq('order_id', orderId)
+        .from("order_items")
+        .select("*")
+        .eq("order_id", orderId);
 
       if (itemsError) {
-        console.error('Error loading order items:', itemsError)
+        console.error("Error loading order items:", itemsError);
       }
 
       if (itemsData) {
-        console.log('Order items data:', itemsData)
-        console.log('Item count:', itemsData.length)
-        
+        console.log("Order items data:", itemsData);
+        console.log("Item count:", itemsData.length);
+
         // Log each item to see which fields are present
         itemsData.forEach((item, index) => {
           console.log(`Item ${index}:`, {
@@ -65,54 +65,70 @@ export default function OrderConfirmationPage() {
             product_id: item.product_id,
             color_id: item.color_id,
             quantity_id: item.quantity_id,
+            quantity_ordered: item.quantity_ordered,
             quantity: item.quantity,
+            price_at_purchase: item.price_at_purchase,
             price: item.price,
-          })
-        })
-        
+          });
+        });
+
         // Load product details for each item
         const enrichedItems = await Promise.all(
           itemsData.map(async (item: any) => {
             try {
               // Load product
               const { data: productData, error: productError } = await supabase
-                .from('products')
-                .select('id, name, price')
-                .eq('id', item.product_id)
-                .single()
+                .from("products")
+                .select("id, name, price")
+                .eq("id", item.product_id)
+                .single();
 
-              if (productError) console.error('Error loading product:', productError)
-              else console.log(`Product loaded for item ${item.product_id}:`, productData)
+              if (productError)
+                console.error("Error loading product:", productError);
+              else
+                console.log(
+                  `Product loaded for item ${item.product_id}:`,
+                  productData,
+                );
 
               // Load color if color_id exists
-              let colorData = null
+              let colorData = null;
               if (item.color_id) {
                 const { data: colorRes, error: colorError } = await supabase
-                  .from('product_colors')
-                  .select('color_name')
-                  .eq('id', item.color_id)
-                  .single()
+                  .from("product_colors")
+                  .select("color_name")
+                  .eq("id", item.color_id)
+                  .single();
 
-                if (colorError) console.warn('Error loading color:', colorError)
+                if (colorError)
+                  console.warn("Error loading color:", colorError);
                 else {
-                  colorData = colorRes
-                  console.log(`Color loaded for item ${item.color_id}:`, colorData)
+                  colorData = colorRes;
+                  console.log(
+                    `Color loaded for item ${item.color_id}:`,
+                    colorData,
+                  );
                 }
               }
 
               // Load quantity if quantity_id exists
-              let quantityData = null
+              let quantityData = null;
               if (item.quantity_id) {
-                const { data: quantityRes, error: quantityError } = await supabase
-                  .from('product_quantities')
-                  .select('length_inches')
-                  .eq('id', item.quantity_id)
-                  .single()
+                const { data: quantityRes, error: quantityError } =
+                  await supabase
+                    .from("product_quantities")
+                    .select("length_inches")
+                    .eq("id", item.quantity_id)
+                    .single();
 
-                if (quantityError) console.warn('Error loading quantity:', quantityError)
+                if (quantityError)
+                  console.warn("Error loading quantity:", quantityError);
                 else {
-                  quantityData = quantityRes
-                  console.log(`Quantity loaded for item ${item.quantity_id}:`, quantityData)
+                  quantityData = quantityRes;
+                  console.log(
+                    `Quantity loaded for item ${item.quantity_id}:`,
+                    quantityData,
+                  );
                 }
               }
 
@@ -121,42 +137,46 @@ export default function OrderConfirmationPage() {
                 product: productData,
                 color: colorData,
                 quantity_data: quantityData,
-              }
+              };
             } catch (err) {
-              console.error('Error enriching item:', err)
+              console.error("Error enriching item:", err);
               return {
                 ...item,
                 product: null,
                 color: null,
                 quantity_data: null,
-              }
+              };
             }
-          })
-        )
-        
-        console.log('Enriched items:', enrichedItems)
-        setOrderItems(enrichedItems)
+          }),
+        );
+
+        console.log("Enriched items:", enrichedItems);
+        setOrderItems(enrichedItems);
       }
 
       // Send confirmation email
       if (!emailSent) {
-        sendConfirmationEmail(user.email, orderData, itemsData)
-        setEmailSent(true)
+        sendConfirmationEmail(user.email, orderData, itemsData);
+        setEmailSent(true);
       }
 
-      setLoading(false)
-    }
+      setLoading(false);
+    };
 
-    loadOrder()
-  }, [orderId])
+    loadOrder();
+  }, [orderId]);
 
-  const sendConfirmationEmail = async (email: string | undefined, orderData: any, itemsData: any[]) => {
-    if (!email) return
+  const sendConfirmationEmail = async (
+    email: string | undefined,
+    orderData: any,
+    itemsData: any[],
+  ) => {
+    if (!email) return;
 
     try {
-      const response = await fetch('/api/send-order-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/send-order-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
           orderId: orderData.id,
@@ -165,19 +185,19 @@ export default function OrderConfirmationPage() {
           items: itemsData,
           createdAt: orderData.created_at,
         }),
-      })
+      });
 
       if (response.ok) {
-        console.log('Confirmation email sent successfully')
+        console.log("Confirmation email sent successfully");
       }
     } catch (error) {
-      console.error('Error sending confirmation email:', error)
+      console.error("Error sending confirmation email:", error);
     }
-  }
+  };
 
   const handlePrint = () => {
-    window.print()
-  }
+    window.print();
+  };
 
   if (loading) {
     return (
@@ -186,7 +206,7 @@ export default function OrderConfirmationPage() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600"></div>
         </div>
       </main>
-    )
+    );
   }
 
   if (!order) {
@@ -196,7 +216,7 @@ export default function OrderConfirmationPage() {
           <p className="text-gray-500">Order not found</p>
         </div>
       </main>
-    )
+    );
   }
 
   return (
@@ -217,11 +237,7 @@ export default function OrderConfirmationPage() {
           >
             <Link href="/">Continue Shopping</Link>
           </Button>
-          <Button
-            variant="outline"
-            asChild
-            className="py-2 text-sm"
-          >
+          <Button variant="outline" asChild className="py-2 text-sm">
             <Link href="/orders">View Orders</Link>
           </Button>
         </div>
@@ -239,27 +255,41 @@ export default function OrderConfirmationPage() {
                 className="h-10 w-auto"
               />
             </div>
-            <h1 className="text-lg font-bold text-gray-900">AURA LUXE EXTENSIONS</h1>
-            <p className="text-xs text-gray-600">Premium Quality Hair Extensions</p>
+            <h1 className="text-lg font-bold text-gray-900">
+              AURA LUXE EXTENSIONS
+            </h1>
+            <p className="text-xs text-gray-600">
+              Premium Quality Hair Extensions
+            </p>
           </div>
 
           {/* Order Header */}
           <div className="grid grid-cols-2 gap-4 text-sm border-b border-gray-300 pb-3">
             <div>
-              <p className="text-gray-600 text-xs font-semibold">ORDER NUMBER</p>
-              <p className="font-bold text-gray-900 text-sm">{order.id.slice(0, 8).toUpperCase()}</p>
+              <p className="text-gray-600 text-xs font-semibold">
+                ORDER NUMBER
+              </p>
+              <p className="font-bold text-gray-900 text-sm">
+                {order.id.slice(0, 8).toUpperCase()}
+              </p>
             </div>
             <div className="text-right">
               <p className="text-gray-600 text-xs font-semibold">DATE</p>
-              <p className="font-bold text-gray-900 text-sm">{new Date(order.created_at).toLocaleDateString()}</p>
+              <p className="font-bold text-gray-900 text-sm">
+                {new Date(order.created_at).toLocaleDateString()}
+              </p>
             </div>
             <div>
               <p className="text-gray-600 text-xs font-semibold">STATUS</p>
-              <p className="font-bold text-green-600 capitalize text-sm">{order.status}</p>
+              <p className="font-bold text-green-600 capitalize text-sm">
+                {order.status}
+              </p>
             </div>
             <div className="text-right">
               <p className="text-gray-600 text-xs font-semibold">TOTAL</p>
-              <p className="font-bold text-amber-600 text-sm">{formatPrice(order.total_amount)}</p>
+              <p className="font-bold text-amber-600 text-sm">
+                {formatPrice(order.total_amount)}
+              </p>
             </div>
           </div>
 
@@ -269,15 +299,24 @@ export default function OrderConfirmationPage() {
             <div className="space-y-1">
               {orderItems && orderItems.length > 0 ? (
                 orderItems.map((item) => (
-                  <div key={item.id} className="flex justify-between items-start py-1 border-b border-gray-200 last:border-0">
+                  <div
+                    key={item.id}
+                    className="flex justify-between items-start py-1 border-b border-gray-200 last:border-0"
+                  >
                     <div className="flex-1 pr-2">
                       <p className="font-medium text-gray-900">
-                        {item.product?.name || item.product_id || 'Unknown Product'}
+                        {item.product?.name ||
+                          item.product_id ||
+                          "Unknown Product"}
                       </p>
                       <p className="text-gray-600">
-                        Color: {item.color?.color_name || (item.color_id ? 'Loading...' : 'N/A')} | 
-                        Length: {item.quantity_data?.length_inches || (item.quantity_id ? 'Loading...' : 'N/A')}" | 
-                        Qty: {item.quantity}
+                        Color:{" "}
+                        {item.color?.color_name ||
+                          (item.color_id ? "Loading..." : "N/A")}{" "}
+                        | Length:{" "}
+                        {item.quantity_data?.length_inches ||
+                          (item.quantity_id ? "Loading..." : "N/A")}
+                        " | Qty: {item.quantity_ordered ?? item.quantity ?? 0}
                       </p>
                       {!item.product && (
                         <p className="text-xs text-orange-600 mt-1">
@@ -286,7 +325,12 @@ export default function OrderConfirmationPage() {
                       )}
                     </div>
                     <p className="font-semibold text-gray-900 whitespace-nowrap">
-                      {formatPrice((item.product?.price || 0) * (item.quantity || 1))}
+                      {formatPrice(
+                        (item.product?.price ||
+                          item.price_at_purchase ||
+                          item.price ||
+                          0) * (item.quantity_ordered ?? item.quantity ?? 1),
+                      )}
                     </p>
                   </div>
                 ))
@@ -294,7 +338,10 @@ export default function OrderConfirmationPage() {
                 <div className="text-gray-500 py-2">
                   <p>No items found</p>
                   {orderItems.length === 0 && (
-                    <p className="text-xs text-orange-600 mt-1">Order may have been placed before item tracking was enabled</p>
+                    <p className="text-xs text-orange-600 mt-1">
+                      Order may have been placed before item tracking was
+                      enabled
+                    </p>
                   )}
                 </div>
               )}
@@ -304,7 +351,9 @@ export default function OrderConfirmationPage() {
           {/* Totals */}
           <div className="border-t-2 border-gray-300 pt-2 text-sm font-bold flex justify-between">
             <span>TOTAL:</span>
-            <span className="text-amber-600 text-base">{formatPrice(order.total_amount)}</span>
+            <span className="text-amber-600 text-base">
+              {formatPrice(order.total_amount)}
+            </span>
           </div>
 
           {/* Footer */}
@@ -320,11 +369,13 @@ export default function OrderConfirmationPage() {
           <ul className="space-y-1 text-blue-800 text-sm">
             <li>✓ Your order has been confirmed</li>
             <li>✓ A confirmation email has been sent</li>
-            <li>✓ Your hair extensions will be processed within 2-3 business days</li>
+            <li>
+              ✓ Your hair extensions will be processed within 2-3 business days
+            </li>
             <li>✓ You'll receive delivery updates via phone call</li>
           </ul>
         </div>
       </div>
     </main>
-  )
+  );
 }

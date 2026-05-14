@@ -251,6 +251,19 @@ create table if not exists public.order_items (
 
 alter table public.order_items enable row level security;
 
+drop policy if exists "Users can insert own order items" on public.order_items;
+create policy "Users can insert own order items"
+on public.order_items
+for insert
+to authenticated
+with check (
+  exists (
+    select 1 from public.orders
+    where orders.id = order_items.order_id
+    and orders.user_id = auth.uid()
+  )
+);
+
 drop policy if exists "Users can view own order items" on public.order_items;
 create policy "Users can view own order items"
 on public.order_items
