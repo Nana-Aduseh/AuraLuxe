@@ -12,6 +12,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SuccessModal } from '@/components/auth/success-modal'
+import { claimGuestOrdersAfterAuth } from '@/lib/guest-orders'
 import Link from 'next/link'
 import { useState } from 'react'
 
@@ -38,7 +39,7 @@ export default function Page() {
     }
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -49,6 +50,14 @@ export default function Page() {
         },
       })
       if (error) throw error
+
+      if (data.session) {
+        try {
+          await claimGuestOrdersAfterAuth()
+        } catch (claimError) {
+          console.error('Failed to claim guest orders after signup:', claimError)
+        }
+      }
       
       setShowSuccess(true)
     } catch (error: unknown) {

@@ -13,15 +13,28 @@ import {
 } from '@/lib/api'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import {
+  clearGuestCartItems,
+  getGuestCartItems,
+  removeGuestCartItem,
+  updateGuestCartItemQuantity,
+} from '@/lib/guest-cart'
 
 export default function CartPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
+  const [isGuestCart, setIsGuestCart] = useState(false)
   const supabase = createClient()
   const router = useRouter()
 
-  const loadCart = async (userId: string) => {
+  const loadCart = async (userId?: string | null) => {
+    if (!userId) {
+      setCartItems(getGuestCartItems() as CartItem[])
+      setIsGuestCart(true)
+      return
+    }
+
     try {
       const { data, error } = await supabase
         .from('cart_items')
@@ -65,6 +78,7 @@ export default function CartPage() {
       } else {
         setCartItems([])
       }
+      setIsGuestCart(false)
     } catch (err) {
       console.error('Exception loading cart:', err)
       setCartItems([])
@@ -73,23 +87,33 @@ export default function CartPage() {
 
   useEffect(() => {
     let channel: any = null
+    let isActive = true
 
     const initializeCart = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser()
 
+      if (!isActive) {
+        return
+      }
+
       if (!user) {
-        router.push('/auth/login')
+        await loadCart(null)
+        setLoading(false)
         return
       }
 
       setUser(user)
       await loadCart(user.id)
+
+      if (!isActive) {
+        return
+      }
+
       setLoading(false)
 
       // Set up real-time listener for cart changes
-      // Subscribe to cart changes with proper order: .on() BEFORE .subscribe()
       channel = supabase
         .channel(`cart-page-${user.id}`)
         .on(
@@ -111,6 +135,7 @@ export default function CartPage() {
     initializeCart()
 
     return () => {
+      isActive = false
       if (channel) {
         supabase.removeChannel(channel)
       }
@@ -118,6 +143,11 @@ export default function CartPage() {
   }, [])
 
   const handleRemove = async (cartItemId: string) => {
+    if (isGuestCart) {
+      setCartItems(removeGuestCartItem(cartItemId) as CartItem[])
+      return
+    }
+
     await removeFromCart(cartItemId)
     setCartItems((items) => items.filter((item) => item.id !== cartItemId))
   }
@@ -125,6 +155,11 @@ export default function CartPage() {
   const handleQuantityChange = async (cartItemId: string, newQuantity: number) => {
     if (newQuantity < 1) {
       handleRemove(cartItemId)
+      return
+    }
+
+    if (isGuestCart) {
+      setCartItems(updateGuestCartItemQuantity(cartItemId, newQuantity) as CartItem[])
       return
     }
 
@@ -142,6 +177,15 @@ export default function CartPage() {
     const product = item.product || {}
     return sum + ((product.price || 0) * (item.quantity_ordered || 1))
   }, 0)
+
+  const handleSignInToContinue = () => {
+    window.sessionStorage.setItem('aura-luxe-checkout-return', '/checkout?mode=guest')
+    router.push('/auth/login?returnTo=%2Fcheckout%3Fmode%3Dguest')
+  }
+
+  const handleContinueGuest = () => {
+    router.push('/checkout?mode=guest')
+  }
 
   if (loading) {
     return (
@@ -170,9 +214,11 @@ export default function CartPage() {
             <p className="text-foreground/70 text-lg mb-8">
               Your cart is empty. Start adding some extensions!
             </p>
-            <Button asChild className="bg-primary hover:bg-primary/90">
-              <Link href="/extensions">Shop Extensions</Link>
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button asChild className="bg-primary hover:bg-primary/90">
+                <Link href="/extensions">Shop Extensions</Link>
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -339,8 +385,18 @@ export default function CartPage() {
                   asChild
                   className="w-full bg-primary hover:bg-primary/90 text-white py-6 font-semibold text-base rounded-lg transition-all hover:shadow-lg"
                 >
-                  <Link href="/checkout">Proceed to Checkout</Link>
+                  <Link href={isGuestCart ? "/checkout?mode=guest" : "/checkout"}>Proceed to Checkout</Link>
                 </Button>
+
+                {isGuestCart && (
+                  <Button
+                    onClick={handleSignInToContinue}
+                    variant="outline"
+                    className="w-full mt-3 py-6 font-semibold text-base"
+                  >
+                    Sign In to Continue
+                  </Button>
+                )}
 
                 <Button
                   asChild

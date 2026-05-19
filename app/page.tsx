@@ -17,6 +17,7 @@ import { createClient } from '@/lib/supabase/client'
 import ProductCard from '@/components/product-card'
 import Footer from '@/components/footer'
 import { Input } from '@/components/ui/input'
+import WhatsAppButton from '@/components/whatsapp-button'
 
 export default function Home() {
   const [allProducts, setAllProducts] = useState<Product[]>([])
@@ -228,6 +229,8 @@ export default function Home() {
           onAddedToCart={handleCartAdded}
         />
       )}
+
+      <WhatsAppButton message="Hi Aura Luxe, I want to place an order." />
 
       <Footer />
     </main>

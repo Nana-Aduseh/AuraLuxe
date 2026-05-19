@@ -7,6 +7,7 @@ import { formatPrice } from '@/lib/currency'
 import { ArrowLeft, Eye } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAccessibleOrdersAfterAuth } from '@/lib/guest-orders'
 
 interface Order {
   id: string
@@ -39,15 +40,14 @@ export default function OrdersPage() {
 
       setUserEmail(user.email || '')
 
-      // Fetch all orders for this user
-      const { data: ordersData } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+      try {
+        const ordersData = await fetchAccessibleOrdersAfterAuth()
 
-      if (ordersData) {
-        setOrders(ordersData as Order[])
+        if (ordersData) {
+          setOrders(ordersData as Order[])
+        }
+      } catch (ordersError) {
+        console.error('Failed to load accessible orders:', ordersError)
       }
 
       setLoading(false)

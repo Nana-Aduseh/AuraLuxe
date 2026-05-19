@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { syncUserProfile } from '@/lib/profile'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -17,11 +16,25 @@ export async function GET(request: NextRequest) {
       } = await supabase.auth.getUser()
 
       if (user) {
-        const dataClient = createAdminClient() ?? supabase
-        await syncUserProfile(dataClient, user)
+        await syncUserProfile(supabase, user)
+        const guestToken = request.cookies.get('aura-luxe-guest-order-token')?.value ?? null
+
+        try {
+          await supabase.rpc('claim_guest_orders', {
+            p_guest_token: guestToken,
+          })
+        } catch (error) {
+          console.error('Failed to claim guest orders:', error)
+        }
       }
 
-      return NextResponse.redirect(`${origin}${next}`)
+      const response = NextResponse.redirect(`${origin}${next}`)
+      response.cookies.set('aura-luxe-guest-order-token', '', {
+        path: '/',
+        maxAge: 0,
+      })
+
+      return response
     }
   }
 

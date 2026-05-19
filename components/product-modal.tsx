@@ -6,8 +6,18 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/currency";
 import { X, ShoppingCart, Bolt } from "lucide-react";
-import { Product, ProductColor, ProductQuantity, addToCart } from "@/lib/api";
+import {
+  Product,
+  ProductColor,
+  ProductQuantity,
+  addToCart,
+  getEffectiveProductPrice,
+} from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
+import {
+  addGuestCartItem,
+  saveGuestBuyNowItem,
+} from "@/lib/guest-cart";
 import { toast } from "sonner";
 
 interface ProductModalProps {
@@ -41,6 +51,7 @@ export default function ProductModal({
 
   const selectedQtyData = quantities.find((q) => q.id === selectedQuantity);
   const selectedColorData = colors.find((c) => c.id === selectedColor);
+  const unitPrice = getEffectiveProductPrice(product);
 
   useEffect(() => {
     const preloadUrls = [
@@ -65,11 +76,6 @@ export default function ProductModal({
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) {
-      window.location.href = "/auth/login";
-      return;
-    }
-
     // Check stock availability
     const selectedQtyData = quantities.find((q) => q.id === selectedQuantity);
     const availableStock = selectedQtyData?.stock_quantity || 0;
@@ -83,13 +89,17 @@ export default function ProductModal({
 
     setLoading(true);
     try {
-      await addToCart(
-        user.id,
-        product.id,
-        selectedColor,
-        selectedQuantity,
-        quantity,
-      );
+      if (user) {
+        await addToCart(
+          user.id,
+          product.id,
+          selectedColor,
+          selectedQuantity,
+          quantity,
+        );
+      } else {
+        addGuestCartItem(product, selectedColorData || null, selectedQtyData || null, quantity);
+      }
       toast.success("Added to cart successfully! 🛍️");
       // Don't close the modal - keep it open so user can order different colors
       setQuantity(1); // Reset quantity for next order
@@ -106,11 +116,6 @@ export default function ProductModal({
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) {
-      window.location.href = "/auth/login";
-      return;
-    }
-
     // Check stock availability
     const selectedQtyData = quantities.find((q) => q.id === selectedQuantity);
     const availableStock = selectedQtyData?.stock_quantity || 0;
@@ -126,26 +131,31 @@ export default function ProductModal({
     try {
       const buyNowItem = {
         id: `buy-now-${product.id}-${selectedColor}-${selectedQuantity}`,
-        user_id: user.id,
+        user_id: user?.id || "",
         product_id: product.id,
         color_id: selectedColor,
         quantity_id: selectedQuantity,
         quantity_ordered: quantity,
         product: {
           ...product,
-          price: product.price,
+          price: getEffectiveProductPrice(product),
         },
         color: selectedColorData,
         quantity: selectedQtyData,
       };
 
-      window.sessionStorage.setItem(
-        "aura-luxe-buy-now",
-        JSON.stringify(buyNowItem),
-      );
-      window.sessionStorage.setItem("aura-luxe-checkout-mode", "buy-now");
+      if (user) {
+        window.sessionStorage.setItem(
+          "aura-luxe-buy-now",
+          JSON.stringify(buyNowItem),
+        );
+        window.sessionStorage.setItem("aura-luxe-checkout-mode", "buy-now");
+      } else {
+        saveGuestBuyNowItem(buyNowItem);
+        window.sessionStorage.setItem("aura-luxe-checkout-mode", "guest");
+      }
       onClose();
-      router.push("/checkout?mode=buy-now");
+      router.push(user ? "/checkout?mode=buy-now" : "/checkout?mode=guest");
     } catch (error) {
       console.error("Error:", error);
       toast.error("Failed to proceed. Please try again.");
@@ -227,11 +237,11 @@ export default function ProductModal({
                 {/* Simplified Price Display */}
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
                   <div className="text-sm text-gray-600 mb-2">
-                    Price: {formatPrice(product.price)} × {quantity}{" "}
+                    Price: {formatPrice(unitPrice)} × {quantity}{" "}
                     {quantity === 1 ? "piece" : "pieces"}
                   </div>
                   <div className="text-3xl font-bold text-amber-700">
-                    {formatPrice(product.price * quantity)}
+                    {formatPrice(unitPrice * quantity)}
                   </div>
                 </div>
               </div>

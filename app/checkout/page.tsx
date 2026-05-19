@@ -7,8 +7,19 @@ import { Input } from "@/components/ui/input";
 import { formatPrice } from "@/lib/currency";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { getCart, createOrder, CartItem } from "@/lib/api";
+import { getCart, createOrder, CartItem, getEffectiveProductPrice } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
+import { persistGuestOrderContext } from "@/lib/guest-orders";
+import WhatsAppButton from "@/components/whatsapp-button";
+import {
+  clearGuestBuyNowItem,
+  clearGuestCartItems,
+  clearGuestCheckoutDraft,
+  getGuestBuyNowItem,
+  getGuestCartItems,
+  getGuestCheckoutDraft,
+  saveGuestCheckoutDraft,
+} from "@/lib/guest-cart";
 
 const GHANA_REGIONS = [
   "Ahafo",
@@ -34,13 +45,15 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [checkoutChoice, setCheckoutChoice] = useState<"guest" | "account">("guest");
+  const [isGuestFlow, setIsGuestFlow] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [useSavedAddress, setUseSavedAddress] = useState(false);
   const [savedAddress, setSavedAddress] = useState<any>(null);
   const [deliveryType, setDeliveryType] = useState<"delivery" | "pickup">(
     "delivery",
   );
-  const [checkoutMode, setCheckoutMode] = useState<"cart" | "buy-now">("cart");
+  const [checkoutMode, setCheckoutMode] = useState<"cart" | "buy-now" | "guest">("cart");
   const router = useRouter();
   const supabase = createClient();
 
@@ -60,41 +73,67 @@ export default function CheckoutPage() {
   const [cardExpiry, setCardExpiry] = useState("");
   const [cardCVC, setCardCVC] = useState("");
 
+  const syncGuestDraftToUser = async (currentUserId: string) => {
+    const guestDraft = getGuestCheckoutDraft();
+
+    if (!guestDraft) {
+      return;
+    }
+
+    await supabase.from("user_addresses").upsert({
+      user_id: currentUserId,
+      first_name: guestDraft.firstName,
+      last_name: guestDraft.lastName,
+      email: guestDraft.email,
+      address: guestDraft.address,
+      town: guestDraft.town,
+      region: guestDraft.region,
+      phone: guestDraft.phone,
+    });
+
+    await fetch("/api/profile/sync", { method: "POST" }).catch(() => null);
+    clearGuestCheckoutDraft();
+  };
+
   useEffect(() => {
     const loadData = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user) {
-        router.push("/auth/login");
-        return;
+      setUser(user);
+
+      if (user) {
+        setEmail(user.email || "");
+        setCheckoutChoice("account");
+      } else {
+        setEmail("");
+        setCheckoutChoice("guest");
       }
 
-      setUser(user);
-      setEmail(user.email || "");
+      // Load saved address for signed-in users only
+      if (user) {
+        const { data: address } = await supabase
+          .from("user_addresses")
+          .select("*")
+          .eq("user_id", user.id)
+          .single();
 
-      // Load saved address
-      const { data: address } = await supabase
-        .from("user_addresses")
-        .select("*")
-        .eq("user_id", user.id)
-        .single();
-
-      if (address) {
-        setSavedAddress(address);
-        // Auto-load saved address
-        setFirstName(address.first_name);
-        setLastName(address.last_name);
-        setEmail(address.email);
-        setAddress(address.address);
-        setTown(address.town);
-        setRegion(address.region);
-        setPhone(address.phone || "");
-        setUseSavedAddress(true);
-        setIsEditingAddress(false);
-      } else {
-        setUseSavedAddress(false);
+        if (address) {
+          setSavedAddress(address);
+          // Auto-load saved address
+          setFirstName(address.first_name);
+          setLastName(address.last_name);
+          setEmail(address.email);
+          setAddress(address.address);
+          setTown(address.town);
+          setRegion(address.region);
+          setPhone(address.phone || "");
+          setUseSavedAddress(true);
+          setIsEditingAddress(false);
+        } else {
+          setUseSavedAddress(false);
+        }
       }
 
       const urlMode = new URLSearchParams(window.location.search).get("mode");
@@ -102,29 +141,85 @@ export default function CheckoutPage() {
         "aura-luxe-checkout-mode",
       );
       const mode =
-        urlMode === "buy-now" || storedMode === "buy-now" ? "buy-now" : "cart";
+        urlMode === "buy-now"
+          ? "buy-now"
+          : urlMode === "guest" || storedMode === "guest"
+            ? "guest"
+            : storedMode === "buy-now"
+              ? "buy-now"
+              : "cart";
 
       setCheckoutMode(mode);
+
+      if (user && getGuestCheckoutDraft()) {
+        await syncGuestDraftToUser(user.id);
+      }
 
       if (mode === "buy-now") {
         const savedBuyNowItem =
           window.sessionStorage.getItem("aura-luxe-buy-now");
 
         if (!savedBuyNowItem) {
-          router.push("/cart");
+          const guestBuyNowItem = getGuestBuyNowItem();
+
+          if (!guestBuyNowItem) {
+            router.push("/cart");
+            return;
+          }
+
+          setCartItems([guestBuyNowItem]);
+          setIsGuestFlow(!user);
+          setLoading(false);
           return;
         }
 
         try {
           const parsedItem = JSON.parse(savedBuyNowItem);
           setCartItems([parsedItem]);
+          setIsGuestFlow(false);
         } catch {
           router.push("/cart");
           return;
         }
+      } else if (mode === "guest") {
+        const guestItems = getGuestCartItems();
+
+        if (guestItems.length > 0) {
+          setCartItems(guestItems);
+          setIsGuestFlow(true);
+        } else {
+          const guestBuyNowItem = getGuestBuyNowItem();
+
+          if (guestBuyNowItem) {
+            setCartItems([guestBuyNowItem]);
+            setIsGuestFlow(true);
+          } else {
+            router.push("/cart");
+            return;
+          }
+        }
       } else {
+        if (!user) {
+          const guestItems = getGuestCartItems();
+          const guestBuyNowItem = getGuestBuyNowItem();
+          if (guestItems.length > 0) {
+            setCartItems(guestItems);
+            setIsGuestFlow(true);
+          } else if (guestBuyNowItem) {
+            setCartItems([guestBuyNowItem]);
+            setIsGuestFlow(true);
+          } else {
+            router.push("/cart");
+            return;
+          }
+
+          setLoading(false);
+          return;
+        }
+
         const cart = await getCart(user.id);
         setCartItems(cart);
+        setIsGuestFlow(false);
 
         if (cart.length === 0) {
           router.push("/cart");
@@ -140,7 +235,9 @@ export default function CheckoutPage() {
 
   const total = cartItems.reduce((sum, item) => {
     const product = item.product || {};
-    return sum + (product.price || 0) * (item.quantity_ordered || 1);
+    return (
+      sum + getEffectiveProductPrice(item.product) * (item.quantity_ordered || 1)
+    );
   }, 0);
 
   const handleUseSavedAddress = () => {
@@ -226,6 +323,23 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (!user && (!firstName || !lastName || !email)) {
+      alert("Please fill in your name and email to continue as a guest.");
+      return;
+    }
+
+    if (!user) {
+      saveGuestCheckoutDraft({
+        firstName,
+        lastName,
+        email,
+        phone,
+        address,
+        town,
+        region,
+      });
+    }
+
     // Save address if it's different from saved one
     if (user && deliveryType === "delivery" && isEditingAddress) {
       await handleSaveAsDefault();
@@ -249,24 +363,48 @@ export default function CheckoutPage() {
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
       // Create order
-      if (user) {
-        const order = await createOrder(
-          user.id,
-          cartItems,
-          total,
-          deliveryType,
-          checkoutMode !== "buy-now",
-        );
+      const order = await createOrder(
+        user?.id || null,
+        cartItems,
+        total,
+        deliveryType,
+        checkoutMode !== "buy-now",
+        user
+          ? undefined
+          : {
+              firstName,
+              lastName,
+              email,
+              phone,
+              address,
+              town,
+              region,
+            },
+      );
 
-        if (order) {
-          window.sessionStorage.removeItem("aura-luxe-buy-now");
-          window.sessionStorage.removeItem("aura-luxe-checkout-mode");
+      if (order) {
+        window.sessionStorage.removeItem("aura-luxe-buy-now");
+        window.sessionStorage.removeItem("aura-luxe-checkout-mode");
+        clearGuestBuyNowItem();
+        clearGuestCheckoutDraft();
+        clearGuestCartItems();
+
+        if (user) {
           router.push(`/order-confirmation/${order.id}`);
+        } else {
+          persistGuestOrderContext({
+            orderId: order.id,
+            token: order.guest_access_token || "",
+            email,
+          });
+          router.push(`/order-confirmation/${order.id}?guest=1`);
         }
       }
     } catch (error) {
       console.error("Payment error:", error);
-      alert("Payment failed. Please try again.");
+      const message = error instanceof Error ? error.message : "";
+
+      alert(message || "Payment failed. Please try again.");
     } finally {
       setProcessing(false);
     }
@@ -314,6 +452,80 @@ export default function CheckoutPage() {
                 <h2 className="text-xl font-semibold text-gray-900 mb-6">
                   Order Information
                 </h2>
+
+                {!user && (
+                  <div className="mb-8 rounded-2xl border border-border/30 bg-card p-4 sm:p-6 shadow-sm">
+                    <h3 className="text-lg font-semibold text-foreground mb-4">
+                      Checkout As
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <button
+                        type="button"
+                        onClick={() => setCheckoutChoice("guest")}
+                        className={`text-left rounded-2xl border-2 p-5 transition-all ${
+                          checkoutChoice === "guest"
+                            ? "border-primary bg-primary/10 shadow-sm"
+                            : "border-border/30 bg-background hover:border-primary/40"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="2">
+                                <circle cx="12" cy="8" r="4" />
+                                <path d="M4 20c1.8-4 5-6 8-6s6.2 2 8 6" />
+                              </svg>
+                            </div>
+                            <h4 className="text-lg font-semibold text-foreground">
+                              Guest Checkout
+                            </h4>
+                            <p className="mt-1 text-sm text-foreground/70">
+                              Quick checkout without creating an account
+                            </p>
+                          </div>
+                          <div className={`mt-1 h-6 w-6 rounded-full border-2 ${checkoutChoice === "guest" ? "border-primary bg-primary" : "border-border/30"}`} />
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          saveGuestCheckoutDraft({
+                            firstName,
+                            lastName,
+                            email,
+                            phone,
+                            address,
+                            town,
+                            region,
+                          });
+                          router.push(
+                            "/auth/login?returnTo=%2Fcheckout%3Fmode%3Dguest",
+                          );
+                        }}
+                        className="text-left rounded-2xl border-2 border-border/30 bg-background p-5 transition-all hover:border-primary/40"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="2">
+                                <circle cx="12" cy="7" r="4" />
+                                <path d="M5 21c1.4-3.5 4.2-5.5 7-5.5S17.6 17.5 19 21" />
+                              </svg>
+                            </div>
+                            <h4 className="text-lg font-semibold text-foreground">
+                              Create Account
+                            </h4>
+                            <p className="mt-1 text-sm text-foreground/70">
+                              Save your info and track orders
+                            </p>
+                          </div>
+                          <div className="mt-1 h-6 w-6 rounded-full border-2 border-border/30" />
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Saved Address Display */}
                 {savedAddress && !isEditingAddress && (
@@ -419,10 +631,50 @@ export default function CheckoutPage() {
                       </div>
                     )}
 
-                  {/* Phone Number - Always show */}
-                  {(isEditingAddress ||
-                    !savedAddress ||
-                    deliveryType === "pickup") && (
+                  {/* Guest contact info */}
+                  {!user && checkoutChoice === "guest" && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            First Name *
+                          </label>
+                          <Input
+                            value={firstName}
+                            onChange={(e) => setFirstName(e.target.value)}
+                            placeholder="First name"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Last Name *
+                          </label>
+                          <Input
+                            value={lastName}
+                            onChange={(e) => setLastName(e.target.value)}
+                            placeholder="Last name"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Email Address *
+                        </label>
+                        <Input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="you@example.com"
+                          required
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {(deliveryType === "pickup" || (!user && checkoutChoice === "guest")) && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Phone Number *
@@ -438,55 +690,102 @@ export default function CheckoutPage() {
                     </div>
                   )}
 
-                  {/* Delivery Address Fields - Show when editing or no saved address */}
-                  {deliveryType === "delivery" &&
-                    (isEditingAddress || !savedAddress) && (
-                      <>
+                  {/* Delivery Address Fields */}
+                  {deliveryType === "delivery" && user && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Street Address *
+                        </label>
+                        <Input
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          placeholder="Street address"
+                          required
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Delivery Address *
+                            Region *
+                          </label>
+                          <select
+                            value={region}
+                            onChange={(e) => setRegion(e.target.value)}
+                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                            required
+                          >
+                            <option value="">Select region</option>
+                            {GHANA_REGIONS.map((ghanaRegion) => (
+                              <option key={ghanaRegion} value={ghanaRegion}>
+                                {ghanaRegion}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            City *
                           </label>
                           <Input
-                            value={address}
-                            onChange={(e) => setAddress(e.target.value)}
-                            placeholder="Street address"
+                            value={town}
+                            onChange={(e) => setTown(e.target.value)}
+                            placeholder="City"
                             required
                           />
                         </div>
+                      </div>
+                    </>
+                  )}
 
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Town *
-                            </label>
-                            <Input
-                              value={town}
-                              onChange={(e) => setTown(e.target.value)}
-                              placeholder="Town/City"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Region *
-                            </label>
-                            <select
-                              value={region}
-                              onChange={(e) => setRegion(e.target.value)}
-                              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
-                              required
-                            >
-                              <option value="">Select region</option>
-                              {GHANA_REGIONS.map((ghanaRegion) => (
-                                <option key={ghanaRegion} value={ghanaRegion}>
-                                  {ghanaRegion}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
+                  {deliveryType === "delivery" && !user && checkoutChoice === "guest" && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Street Address *
+                        </label>
+                        <Input
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          placeholder="Street address"
+                          required
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Region *
+                          </label>
+                          <select
+                            value={region}
+                            onChange={(e) => setRegion(e.target.value)}
+                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                            required
+                          >
+                            <option value="">Select region</option>
+                            {GHANA_REGIONS.map((ghanaRegion) => (
+                              <option key={ghanaRegion} value={ghanaRegion}>
+                                {ghanaRegion}
+                              </option>
+                            ))}
+                          </select>
                         </div>
-                      </>
-                    )}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            City *
+                          </label>
+                          <Input
+                            value={town}
+                            onChange={(e) => setTown(e.target.value)}
+                            placeholder="City"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   {/* Pickup Info */}
                   {deliveryType === "pickup" && (
@@ -624,11 +923,23 @@ export default function CheckoutPage() {
                       <span className="text-gray-700">
                         {item.product?.name} x{item.quantity_ordered}
                       </span>
-                      <span className="text-gray-900 font-medium">
-                        {formatPrice(
-                          (item.product?.price || 0) * item.quantity_ordered,
-                        )}
-                      </span>
+                      <div className="text-right">
+                        {item.product?.promo_enabled &&
+                        item.product?.discounted_price ? (
+                          <span className="text-xs text-gray-500 line-through block">
+                            {formatPrice(
+                              (item.product.original_price || item.product.price || 0) *
+                                item.quantity_ordered,
+                            )}
+                          </span>
+                        ) : null}
+                        <span className="text-gray-900 font-medium">
+                          {formatPrice(
+                            getEffectiveProductPrice(item.product) *
+                              item.quantity_ordered,
+                          )}
+                        </span>
+                      </div>
                     </div>
                     <div className="text-xs text-gray-500">
                       {item.color?.color_name} • {item.quantity?.length_inches}
@@ -659,6 +970,8 @@ export default function CheckoutPage() {
           </div>
         </div>
       </div>
+
+      <WhatsAppButton message="Hi Aura Luxe, I need help with checkout." />
     </main>
   );
 }

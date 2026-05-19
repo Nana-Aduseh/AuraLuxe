@@ -1,24 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/currency";
-import { CheckCircle, Printer, Mail } from "lucide-react";
+import { CheckCircle, Printer } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
+import { persistGuestOrderContext } from "@/lib/guest-orders";
+import WhatsAppButton from "@/components/whatsapp-button";
 
 export default function OrderConfirmationPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [order, setOrder] = useState<any>(null);
   const [orderItems, setOrderItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [emailSent, setEmailSent] = useState(false);
   const supabase = createClient();
 
   const orderId = params.orderId as string;
+  const guestToken = searchParams.get("guestToken") || searchParams.get("token");
 
   useEffect(() => {
     const loadOrder = async () => {
@@ -27,7 +30,36 @@ export default function OrderConfirmationPage() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        router.push("/auth/login");
+        const token =
+          guestToken || window.sessionStorage.getItem("aura-luxe-guest-order-token");
+
+        if (!token) {
+          router.push("/auth/login");
+          return;
+        }
+
+        const response = await fetch(
+          `/api/orders/guest/${orderId}?token=${encodeURIComponent(token)}`,
+          { cache: "no-store" },
+        );
+
+        if (!response.ok) {
+          router.push("/");
+          return;
+        }
+
+        const payload = await response.json();
+        setOrder(payload.order);
+        setOrderItems(payload.items || []);
+        persistGuestOrderContext({
+          orderId,
+          token,
+          email: payload.order?.guest_email || null,
+        });
+
+        // Email sending disabled — no action taken here.
+
+        setLoading(false);
         return;
       }
 
@@ -154,11 +186,7 @@ export default function OrderConfirmationPage() {
         setOrderItems(enrichedItems);
       }
 
-      // Send confirmation email
-      if (!emailSent) {
-        sendConfirmationEmail(user.email, orderData, itemsData);
-        setEmailSent(true);
-      }
+      // Email sending disabled — no action taken here.
 
       setLoading(false);
     };
@@ -166,34 +194,7 @@ export default function OrderConfirmationPage() {
     loadOrder();
   }, [orderId]);
 
-  const sendConfirmationEmail = async (
-    email: string | undefined,
-    orderData: any,
-    itemsData: any[],
-  ) => {
-    if (!email) return;
-
-    try {
-      const response = await fetch("/api/send-order-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          orderId: orderData.id,
-          orderNumber: orderData.id.slice(0, 8).toUpperCase(),
-          totalAmount: orderData.total_amount,
-          items: itemsData,
-          createdAt: orderData.created_at,
-        }),
-      });
-
-      if (response.ok) {
-        console.log("Confirmation email sent successfully");
-      }
-    } catch (error) {
-      console.error("Error sending confirmation email:", error);
-    }
-  };
+  // Confirmation emails disabled.
 
   const handlePrint = () => {
     window.print();
@@ -376,6 +377,8 @@ export default function OrderConfirmationPage() {
           </ul>
         </div>
       </div>
+
+      <WhatsAppButton message="Hi Aura Luxe, I need support for my order." />
     </main>
   );
 }

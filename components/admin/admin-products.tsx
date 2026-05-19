@@ -27,6 +27,9 @@ interface ProductFormState {
   name: string;
   description: string;
   price: string;
+  promo_enabled: boolean;
+  original_price: string;
+  discounted_price: string;
   image_url: string;
   base_image_file: File | null;
   base_image_preview_url: string;
@@ -60,6 +63,9 @@ function createEmptyForm(): ProductFormState {
     name: "",
     description: "",
     price: "",
+    promo_enabled: false,
+    original_price: "",
+    discounted_price: "",
     image_url: "",
     base_image_file: null,
     base_image_preview_url: "",
@@ -229,6 +235,15 @@ export default function AdminProducts({
         name: details.product.name,
         description: details.product.description || "",
         price: details.product.price.toString(),
+        promo_enabled: details.product.promo_enabled ?? false,
+        original_price:
+          details.product.original_price != null
+            ? details.product.original_price.toString()
+            : "",
+        discounted_price:
+          details.product.discounted_price != null
+            ? details.product.discounted_price.toString()
+            : "",
         image_url: details.product.image_url || "",
         base_image_file: null,
         base_image_preview_url: details.product.image_url || "",
@@ -270,6 +285,26 @@ export default function AdminProducts({
     if (Number.isNaN(Number(formData.price))) {
       alert("Please enter a valid price.");
       return false;
+    }
+
+    if (formData.promo_enabled) {
+      const originalPrice = Number(formData.original_price);
+      const discountedPrice = Number(formData.discounted_price);
+
+      if (
+        !formData.original_price.trim() ||
+        !formData.discounted_price.trim() ||
+        Number.isNaN(originalPrice) ||
+        Number.isNaN(discountedPrice)
+      ) {
+        alert("Please enter valid original and discounted promo prices.");
+        return false;
+      }
+
+      if (discountedPrice >= originalPrice) {
+        alert("Discounted price should be lower than the original price.");
+        return false;
+      }
     }
 
     const hasAnyImage =
@@ -487,6 +522,13 @@ export default function AdminProducts({
             name: formData.name.trim(),
             description: formData.description.trim(),
             price: Number(formData.price),
+            promo_enabled: formData.promo_enabled,
+            original_price: formData.promo_enabled
+              ? Number(formData.original_price)
+              : null,
+            discounted_price: formData.promo_enabled
+              ? Number(formData.discounted_price)
+              : null,
             image_url: null,
             is_trending: formData.is_trending,
             is_newest: formData.is_newest,
@@ -524,6 +566,13 @@ export default function AdminProducts({
           name: formData.name.trim(),
           description: formData.description.trim(),
           price: Number(formData.price),
+          promo_enabled: formData.promo_enabled,
+          original_price: formData.promo_enabled
+            ? Number(formData.original_price)
+            : null,
+          discounted_price: formData.promo_enabled
+            ? Number(formData.discounted_price)
+            : null,
           image_url: mainImageUrl || null,
           is_trending: formData.is_trending,
           is_newest: formData.is_newest,
@@ -646,6 +695,63 @@ export default function AdminProducts({
                 step="0.01"
               />
             </div>
+          </div>
+
+          <div className="border border-amber-200 rounded-lg p-4 bg-amber-50/60">
+            <label className="flex items-center gap-2 cursor-pointer mb-4">
+              <input
+                type="checkbox"
+                checked={formData.promo_enabled}
+                onChange={() =>
+                  setFormData((current) => ({
+                    ...current,
+                    promo_enabled: !current.promo_enabled,
+                    original_price: current.promo_enabled
+                      ? ""
+                      : current.original_price || current.price,
+                    discounted_price: current.promo_enabled
+                      ? ""
+                      : current.discounted_price,
+                  }))
+                }
+              />
+              <span className="text-sm font-medium text-gray-700">
+                Enable promo pricing
+              </span>
+            </label>
+
+            {formData.promo_enabled && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Original Price
+                  </label>
+                  <Input
+                    type="number"
+                    value={formData.original_price}
+                    onChange={(event) =>
+                      updateFormField("original_price", event.target.value)
+                    }
+                    placeholder="1000"
+                    step="0.01"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Discounted Price
+                  </label>
+                  <Input
+                    type="number"
+                    value={formData.discounted_price}
+                    onChange={(event) =>
+                      updateFormField("discounted_price", event.target.value)
+                    }
+                    placeholder="850"
+                    step="0.01"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
@@ -942,9 +1048,22 @@ export default function AdminProducts({
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <span className="font-semibold text-amber-600">
-                    {formatPrice(product.price)}
-                  </span>
+                  <div className="flex flex-col">
+                    {product.promo_enabled && product.discounted_price ? (
+                      <>
+                        <span className="text-xs text-gray-500 line-through">
+                          {formatPrice(product.original_price || product.price)}
+                        </span>
+                        <span className="font-semibold text-amber-600">
+                          {formatPrice(product.discounted_price)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="font-semibold text-amber-600">
+                        {formatPrice(product.price)}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4">
                   <ProductStockDisplay productId={product.id} />

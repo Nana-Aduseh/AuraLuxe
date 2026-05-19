@@ -5,10 +5,29 @@ export interface Product {
   name: string;
   description: string;
   price: number;
+  promo_enabled?: boolean;
+  original_price?: number | null;
+  discounted_price?: number | null;
   image_url: string | null;
   is_trending: boolean;
   is_newest: boolean;
   created_at: string;
+}
+
+export function getEffectiveProductPrice(product?: Product | null) {
+  if (!product) {
+    return 0;
+  }
+
+  if (
+    product.promo_enabled &&
+    typeof product.discounted_price === "number" &&
+    product.discounted_price > 0
+  ) {
+    return product.discounted_price;
+  }
+
+  return product.price || 0;
 }
 
 export interface ProductColor {
@@ -46,6 +65,16 @@ export interface Order {
   status: string;
   payment_reference: string;
   created_at: string;
+}
+
+export interface GuestCheckoutInfo {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  town: string;
+  region: string;
 }
 
 // Fetch all products
@@ -150,7 +179,7 @@ export async function getCart(userId: string) {
     .select(
       `
     *,
-    products(id, name, description, price, image_url, is_trending, is_newest, created_at),
+    products(id, name, description, price, promo_enabled, original_price, discounted_price, image_url, is_trending, is_newest, created_at),
     product_colors(id, product_id, color_name, color_hex, image_url),
     product_quantities(id, product_id, length_inches, weight_grams, stock_quantity)
   `,
@@ -245,13 +274,38 @@ export async function updateCartItemQuantity(
 
 // Create order
 export async function createOrder(
-  userId: string,
+  userId: string | null,
   cartItems: CartItem[],
   totalAmount: number,
   deliveryType: "delivery" | "pickup" = "delivery",
   shouldClearCart: boolean = true,
+  guestInfo?: GuestCheckoutInfo,
 ) {
   const supabase = createClient();
+
+  if (!userId) {
+    const response = await fetch("/api/orders/guest", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        cartItems,
+        totalAmount,
+        deliveryType,
+        guestInfo,
+      }),
+    });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new Error(payload?.error || "Unable to create guest order.");
+    }
+
+    return (await response.json()) as Order & {
+      guest_access_token?: string;
+    };
+  }
 
   console.log("Creating order with", cartItems.length, "items");
   console.log("Cart items:", cartItems);
@@ -301,7 +355,7 @@ export async function createOrder(
     let { error: itemError } = await supabase.from("order_items").insert({
       ...basePayload,
       quantity_ordered: item.quantity_ordered,
-      price_at_purchase: item.product?.price || 0,
+      price_at_purchase: getEffectiveProductPrice(item.product),
     });
 
     // Fallback for older schemas that still use quantity/price.
@@ -309,7 +363,7 @@ export async function createOrder(
       const legacyInsert = await supabase.from("order_items").insert({
         ...basePayload,
         quantity: item.quantity_ordered,
-        price: item.product?.price || 0,
+        price: getEffectiveProductPrice(item.product),
       });
       itemError = legacyInsert.error;
     }

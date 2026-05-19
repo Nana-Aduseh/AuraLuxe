@@ -1,12 +1,14 @@
 import Image from 'next/image'
 import { formatPrice } from '@/lib/currency'
-import { Product } from '@/lib/api'
+import { Product, getEffectiveProductPrice } from '@/lib/api'
 
 interface ProductCardProps {
   product: Product
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
+  const displayPrice = getEffectiveProductPrice(product)
+
   return (
     <div className="bg-card rounded-xl overflow-hidden shadow-md hover:shadow-2xl transition-all hover:scale-102 border border-border/30 hover:border-primary/30">
       <div className="relative h-48 md:h-72 bg-muted overflow-hidden group">
@@ -35,7 +37,7 @@ export default function ProductCard({ product }: ProductCardProps) {
         </p>
         <div className="flex justify-between items-center pt-2 md:pt-4 border-t border-border/30">
           <span className="text-base md:text-2xl font-bold text-primary">
-            {formatPrice(product.price)}
+            {formatPrice(displayPrice)}
           </span>
           <span className="text-xs bg-primary/10 text-primary px-2 md:px-3 py-1 md:py-1.5 rounded-lg font-semibold transition-all hover:bg-primary/20">
             View

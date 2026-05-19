@@ -87,11 +87,16 @@ export default function Header({ onSearch }: HeaderProps) {
 
     // Set up real-time listener for cart changes
     let channel: any = null;
+    let isActive = true;
 
     const setupCartListener = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
+      if (!isActive) {
+        return;
+      }
 
       if (user) {
         channel = supabase
@@ -121,6 +126,7 @@ export default function Header({ onSearch }: HeaderProps) {
     setupCartListener();
 
     return () => {
+      isActive = false;
       authSubscription.unsubscribe();
       if (channel) {
         supabase.removeChannel(channel);
