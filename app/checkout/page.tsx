@@ -67,12 +67,6 @@ export default function CheckoutPage() {
   const [phone, setPhone] = useState("");
   const [isEditingAddress, setIsEditingAddress] = useState(false);
 
-  // Payment form states
-  const [cardName, setCardName] = useState("");
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCVC, setCardCVC] = useState("");
-
   const syncGuestDraftToUser = async (currentUserId: string) => {
     const guestDraft = getGuestCheckoutDraft();
 
@@ -351,18 +345,10 @@ export default function CheckoutPage() {
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!cardName || !cardNumber || !cardExpiry || !cardCVC) {
-      alert("Please fill in all payment details");
-      return;
-    }
-
     setProcessing(true);
 
     try {
-      // Simulate payment processing
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // Create order
+      // Create order first
       const order = await createOrder(
         user?.id || null,
         cartItems,
@@ -382,30 +368,56 @@ export default function CheckoutPage() {
             },
       );
 
-      if (order) {
-        window.sessionStorage.removeItem("aura-luxe-buy-now");
-        window.sessionStorage.removeItem("aura-luxe-checkout-mode");
-        clearGuestBuyNowItem();
-        clearGuestCheckoutDraft();
-        clearGuestCartItems();
-
-        if (user) {
-          router.push(`/order-confirmation/${order.id}`);
-        } else {
-          persistGuestOrderContext({
-            orderId: order.id,
-            token: order.guest_access_token || "",
-            email,
-          });
-          router.push(`/order-confirmation/${order.id}?guest=1`);
-        }
+      if (!order) {
+        throw new Error("Failed to create order");
       }
+
+      // Clear session/storage before redirecting to Paystack
+      window.sessionStorage.removeItem("aura-luxe-buy-now");
+      window.sessionStorage.removeItem("aura-luxe-checkout-mode");
+      clearGuestBuyNowItem();
+      clearGuestCheckoutDraft();
+      clearGuestCartItems();
+
+      // Store guest context if guest checkout
+      if (!user) {
+        persistGuestOrderContext({
+          orderId: order.id,
+          token: order.guest_access_token || "",
+          email,
+        });
+      }
+
+      // Initialize Paystack transaction
+      const paystackRes = await fetch("/api/paystack/initialize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: user?.email || email,
+          amountGhs: total,
+          orderId: order.id,
+          callback_url: `${window.location.origin}/order-confirmation/${order.id}`,
+        }),
+      });
+
+      if (!paystackRes.ok) {
+        const errData = await paystackRes.json();
+        throw new Error(errData.error || "Failed to initialize payment");
+      }
+
+      const paystackData = await paystackRes.json();
+      const authorizationUrl = paystackData.data?.data?.authorization_url;
+
+      if (!authorizationUrl) {
+        throw new Error("No authorization URL from Paystack");
+      }
+
+      // Redirect user to Paystack checkout
+      window.location.href = authorizationUrl;
     } catch (error) {
       console.error("Payment error:", error);
       const message = error instanceof Error ? error.message : "";
-
       alert(message || "Payment failed. Please try again.");
-    } finally {
       setProcessing(false);
     }
   };
@@ -826,7 +838,6 @@ export default function CheckoutPage() {
                   Payment Information
                 </h2>
 
-                {/* Fake Paystack Logo */}
                 <div className="mb-8 p-4 bg-white rounded border border-gray-200">
                   <div className="text-center mb-4">
                     <div className="inline-block bg-blue-600 text-white px-4 py-2 rounded font-bold">
@@ -834,75 +845,32 @@ export default function CheckoutPage() {
                     </div>
                   </div>
                   <p className="text-center text-sm text-gray-600">
-                    Secure Payment Gateway
+                    Secure Payment Gateway - Mobile Money & Card Payments
                   </p>
                 </div>
 
                 <form onSubmit={handlePayment} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Cardholder Name
-                    </label>
-                    <Input
-                      value={cardName}
-                      onChange={(e) => setCardName(e.target.value)}
-                      placeholder="John Doe"
-                      required
-                    />
+                  <div className="bg-blue-50 border border-blue-200 rounded p-4">
+                    <p className="text-sm text-blue-800">
+                      ✓ Click "Proceed to Payment" to securely pay via Paystack using Mobile Money (MTN, Vodafone, Airtel) or Card.
+                    </p>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Card Number
-                    </label>
-                    <Input
-                      value={cardNumber}
-                      onChange={(e) => setCardNumber(e.target.value)}
-                      placeholder="4242 4242 4242 4242"
-                      maxLength={19}
-                      required
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Expiry Date
-                      </label>
-                      <Input
-                        value={cardExpiry}
-                        onChange={(e) => setCardExpiry(e.target.value)}
-                        placeholder="MM/YY"
-                        maxLength={5}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        CVV
-                      </label>
-                      <Input
-                        value={cardCVC}
-                        onChange={(e) => setCardCVC(e.target.value)}
-                        placeholder="123"
-                        maxLength={4}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="bg-blue-50 border border-blue-200 rounded p-3 mt-6">
-                    <p className="text-sm text-blue-700">
-                      💡 This is a demo. Use any card details to proceed.
+                  <div className="bg-gray-50 rounded p-4 border border-gray-200">
+                    <p className="text-sm text-gray-700 mb-2">
+                      <strong>Amount to Pay:</strong>
+                    </p>
+                    <p className="text-2xl font-bold text-amber-600">
+                      GHS {total.toFixed(2)}
                     </p>
                   </div>
 
                   <Button
                     type="submit"
                     disabled={processing}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white py-3"
+                    className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-lg"
                   >
-                    {processing ? "Processing Payment..." : "Complete Payment"}
+                    {processing ? "Redirecting to Payment..." : "Proceed to Payment"}
                   </Button>
                 </form>
               </div>

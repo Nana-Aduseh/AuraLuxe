@@ -1,8 +1,11 @@
+import crypto from 'crypto'
+
 export interface PaystackInitPayload {
   email: string
   amountGhs: number
   reference?: string
   callback_url?: string
+  orderId?: string
 }
 
 export async function initializePaystackTransaction(payload: PaystackInitPayload) {
@@ -49,4 +52,12 @@ export async function verifyPaystackTransaction(reference: string) {
   }
 
   return res.json()
+}
+
+export function verifyPaystackWebhookSignature(rawBody: string, signature: string): boolean {
+  const secret = process.env.PAYSTACK_SECRET_KEY
+  if (!secret) throw new Error('PAYSTACK_SECRET_KEY is not configured')
+
+  const hash = crypto.createHmac('sha512', secret).update(rawBody).digest('hex')
+  return hash === signature
 }
