@@ -63,6 +63,8 @@ export default function OrderConfirmationPage() {
 
         setLoading(false);
         return;
+      }
+
       const { data: orderData, error: orderError } = await supabase
         .from("orders")
         .select("*")
@@ -230,7 +232,7 @@ export default function OrderConfirmationPage() {
           </div>
         </div>
       </main>
-    )
+    );
   }
 
   if (!order) {
