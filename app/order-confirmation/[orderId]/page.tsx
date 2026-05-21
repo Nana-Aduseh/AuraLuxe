@@ -63,9 +63,6 @@ export default function OrderConfirmationPage() {
 
         setLoading(false);
         return;
-                    setLoadError("We could not confirm this order after returning from payment.");
-                    setLoading(false);
-
       const { data: orderData, error: orderError } = await supabase
         .from("orders")
         .select("*")
