@@ -4,12 +4,13 @@ import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import './globals.css'
 import SiteHeader from '@/components/site-header'
+import ScrollToTop from '@/components/scroll-to-top'
 
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Aura Luxe Extensions | Premium Hair',
+  title: 'AuraLuxe Extensions | Premium Hair',
   description: 'Premium hair extensions for all hair types. Shop trending and newest collections.',
   generator: 'v0.app',
   icons: {
@@ -37,8 +38,9 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="bg-background" suppressHydrationWarning>
-      <body className="font-sans antialiased bg-background text-foreground">
+    <html lang="en" className="bg-background overflow-x-hidden" suppressHydrationWarning>
+      <body className="font-sans antialiased bg-background text-foreground overflow-x-hidden">
+        <ScrollToTop />
         <SiteHeader />
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}

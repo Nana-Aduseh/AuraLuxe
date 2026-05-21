@@ -160,11 +160,11 @@ export default function Header({ onSearch }: HeaderProps) {
           <Link href="/" className="flex items-center gap-2 flex-shrink-0">
             <img
               src="/aura-luxe-logo.png"
-              alt="Aura Luxe"
+              alt="AuraLuxe Extensions"
               className="h-16 w-auto"
             />
             <span className="font-semibold text-foreground text-xs sm:text-sm md:text-base">
-              Aura Luxe
+              AuraLuxe Extensions
             </span>
           </Link>
 

@@ -2,35 +2,27 @@
 
 import { useState, useEffect } from 'react'
 import Carousel from '@/components/carousel'
-import ProductModal from '@/components/product-modal'
 import {
   getProducts,
   getTrendingProducts,
   getNewestProducts,
-  getProductDetails,
   searchProducts,
   Product,
-  ProductColor,
-  ProductQuantity,
 } from '@/lib/api'
 import { createClient } from '@/lib/supabase/client'
 import ProductCard from '@/components/product-card'
 import Footer from '@/components/footer'
 import { Input } from '@/components/ui/input'
 import WhatsAppButton from '@/components/whatsapp-button'
+import { useRouter } from 'next/navigation'
 
 export default function Home() {
+  const router = useRouter()
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [trendingProducts, setTrendingProducts] = useState<Product[]>([])
   const [newestProducts, setNewestProducts] = useState<Product[]>([])
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-  const [productDetails, setProductDetails] = useState<{
-    colors: ProductColor[]
-    quantities: ProductQuantity[]
-  } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Product[]>([])
-  const [refreshCart, setRefreshCart] = useState(0)
   const [userName, setUserName] = useState<string | null>(null)
 
   useEffect(() => {
@@ -102,23 +94,8 @@ export default function Home() {
     }
   }, [searchQuery])
 
-  const handleProductClick = async (product: Product) => {
-    setSelectedProduct(product)
-    const details = await getProductDetails(product.id)
-    if (details) {
-      setProductDetails({
-        colors: details.colors,
-        quantities: details.quantities,
-      })
-    }
-  }
-
-  const handleCartAdded = () => {
-    setRefreshCart((prev) => prev + 1)
-  }
-
   const handleAllExtensionsClick = () => {
-    window.location.href = '/extensions'
+    router.push('/extensions')
   }
 
   return (
@@ -168,11 +145,7 @@ export default function Home() {
             {searchResults.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
                 {searchResults.map((product) => (
-                  <div
-                    key={product.id}
-                    onClick={() => handleProductClick(product)}
-                    className="cursor-pointer"
-                  >
+                  <div key={product.id}>
                     <ProductCard product={product} />
                   </div>
                 ))}
@@ -193,7 +166,6 @@ export default function Home() {
         <Carousel
           products={trendingProducts}
           title="Trending Now"
-          onProductClick={handleProductClick}
         />
       )}
 
@@ -202,7 +174,6 @@ export default function Home() {
         <Carousel
           products={newestProducts}
           title="New Arrivals"
-          onProductClick={handleProductClick}
         />
       )}
 
@@ -211,26 +182,11 @@ export default function Home() {
         <Carousel
           products={allProducts}
           title="All Extensions"
-          onProductClick={handleProductClick}
           onTitleClick={handleAllExtensionsClick}
         />
       )}
 
-      {/* Product Modal */}
-      {selectedProduct && productDetails && (
-        <ProductModal
-          product={selectedProduct}
-          colors={productDetails.colors}
-          quantities={productDetails.quantities}
-          onClose={() => {
-            setSelectedProduct(null)
-            setProductDetails(null)
-          }}
-          onAddedToCart={handleCartAdded}
-        />
-      )}
-
-      <WhatsAppButton message="Hi Aura Luxe, I want to place an order." />
+      <WhatsAppButton message="Hi AuraLuxe Extensions, I want to place an order." />
 
       <Footer />
     </main>

@@ -30,6 +30,42 @@ export function getEffectiveProductPrice(product?: Product | null) {
   return product.price || 0;
 }
 
+export function slugifyProductName(name: string) {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+export function getProductPricing(product?: Product | null) {
+  const hasPromo = Boolean(
+    product?.promo_enabled &&
+      typeof product.discounted_price === "number" &&
+      product.discounted_price > 0,
+  );
+
+  const currentPrice = getEffectiveProductPrice(product);
+  const originalPrice = hasPromo
+    ? product?.original_price || product?.price || currentPrice
+    : null;
+
+  return {
+    hasPromo,
+    currentPrice,
+    originalPrice,
+  };
+}
+
+export async function getProductBySlug(productSlug: string) {
+  const products = await getProducts();
+  const normalizedSlug = productSlug.toLowerCase();
+
+  return products.find(
+    (product) => slugifyProductName(product.name) === normalizedSlug,
+  ) ?? null;
+}
+
 export interface ProductColor {
   id: string;
   product_id: string;
@@ -384,7 +420,10 @@ export async function createOrder(
         await supabase
           .from("product_quantities")
           .update({
-            stock_quantity: qty.stock_quantity - item.quantity_ordered,
+            stock_quantity: Math.max(
+              0,
+              qty.stock_quantity - item.quantity_ordered,
+            ),
           })
           .eq("id", item.quantity_id);
       }

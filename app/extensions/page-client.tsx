@@ -4,13 +4,9 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
   getProducts,
-  getProductDetails,
   Product,
-  ProductColor,
-  ProductQuantity,
 } from '@/lib/api'
 import ProductCard from '@/components/product-card'
-import ProductModal from '@/components/product-modal'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Search, X } from 'lucide-react'
@@ -22,12 +18,6 @@ export default function ExtensionsPageClient() {
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState(searchQuery)
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-  const [productDetails, setProductDetails] = useState<{
-    colors: ProductColor[]
-    quantities: ProductQuantity[]
-  } | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
 
   useEffect(() => {
     setSearchTerm(searchQuery)
@@ -57,22 +47,6 @@ export default function ExtensionsPageClient() {
     )
     setFilteredProducts(filtered)
   }, [searchTerm, products])
-
-  const handleProductClick = async (product: Product) => {
-    try {
-      const details = await getProductDetails(product.id)
-      if (details) {
-        setSelectedProduct(details.product)
-        setProductDetails({
-          colors: details.colors,
-          quantities: details.quantities,
-        })
-        setIsModalOpen(true)
-      }
-    } catch (error) {
-      console.error('Failed to load product details:', error)
-    }
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-background">
@@ -120,7 +94,7 @@ export default function ExtensionsPageClient() {
             {filteredProducts.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-6 lg:gap-8">
                 {filteredProducts.map((product) => (
-                  <div key={product.id} onClick={() => handleProductClick(product)}>
+                  <div key={product.id}>
                     <ProductCard product={product} />
                   </div>
                 ))}
@@ -146,18 +120,6 @@ export default function ExtensionsPageClient() {
         )}
       </div>
 
-      {selectedProduct && productDetails && isModalOpen && (
-        <ProductModal
-          product={selectedProduct}
-          colors={productDetails.colors}
-          quantities={productDetails.quantities}
-          onClose={() => {
-            setIsModalOpen(false)
-            setSelectedProduct(null)
-            setProductDetails(null)
-          }}
-        />
-      )}
     </div>
   )
 }

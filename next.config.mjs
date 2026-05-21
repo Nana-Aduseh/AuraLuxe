@@ -4,6 +4,7 @@ const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  allowedDevOrigins: ['192.168.220.53', 'localhost', '127.0.0.1'],
   typescript: {
     ignoreBuildErrors: true,
   },

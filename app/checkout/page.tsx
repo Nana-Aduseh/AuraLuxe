@@ -48,8 +48,6 @@ export default function CheckoutPage() {
   const [checkoutChoice, setCheckoutChoice] = useState<"guest" | "account">("guest");
   const [isGuestFlow, setIsGuestFlow] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
-  const [useSavedAddress, setUseSavedAddress] = useState(false);
-  const [savedAddress, setSavedAddress] = useState<any>(null);
   const [deliveryType, setDeliveryType] = useState<"delivery" | "pickup">(
     "delivery",
   );
@@ -65,7 +63,6 @@ export default function CheckoutPage() {
   const [town, setTown] = useState("");
   const [region, setRegion] = useState("");
   const [phone, setPhone] = useState("");
-  const [isEditingAddress, setIsEditingAddress] = useState(false);
 
   const syncGuestDraftToUser = async (currentUserId: string) => {
     const guestDraft = getGuestCheckoutDraft();
@@ -103,31 +100,6 @@ export default function CheckoutPage() {
       } else {
         setEmail("");
         setCheckoutChoice("guest");
-      }
-
-      // Load saved address for signed-in users only
-      if (user) {
-        const { data: address } = await supabase
-          .from("user_addresses")
-          .select("*")
-          .eq("user_id", user.id)
-          .single();
-
-        if (address) {
-          setSavedAddress(address);
-          // Auto-load saved address
-          setFirstName(address.first_name);
-          setLastName(address.last_name);
-          setEmail(address.email);
-          setAddress(address.address);
-          setTown(address.town);
-          setRegion(address.region);
-          setPhone(address.phone || "");
-          setUseSavedAddress(true);
-          setIsEditingAddress(false);
-        } else {
-          setUseSavedAddress(false);
-        }
       }
 
       const urlMode = new URLSearchParams(window.location.search).get("mode");
@@ -234,48 +206,6 @@ export default function CheckoutPage() {
     );
   }, 0);
 
-  const handleUseSavedAddress = () => {
-    if (savedAddress) {
-      setFirstName(savedAddress.first_name);
-      setLastName(savedAddress.last_name);
-      setEmail(savedAddress.email);
-      setAddress(savedAddress.address);
-      setTown(savedAddress.town);
-      setRegion(savedAddress.region);
-      setPhone(savedAddress.phone || "");
-      setUseSavedAddress(true);
-      setIsEditingAddress(false);
-    }
-  };
-
-  const handleEditAddress = () => {
-    setIsEditingAddress(true);
-  };
-
-  const handleSaveAsDefault = async () => {
-    if (user && deliveryType === "delivery") {
-      await supabase.from("user_addresses").upsert({
-        user_id: user.id,
-        first_name: firstName,
-        last_name: lastName,
-        email: email,
-        address: address,
-        town: town,
-        region: region,
-        phone: phone,
-      });
-      const { data: updatedAddress } = await supabase
-        .from("user_addresses")
-        .select("*")
-        .eq("user_id", user.id)
-        .single();
-      if (updatedAddress) {
-        setSavedAddress(updatedAddress);
-        setIsEditingAddress(false);
-      }
-    }
-  };
-
   const formatPhoneNumber = (value: string) => {
     const digitsOnly = value.replace(/\D/g, "");
     if (!digitsOnly) {
@@ -334,11 +264,6 @@ export default function CheckoutPage() {
       });
     }
 
-    // Save address if it's different from saved one
-    if (user && deliveryType === "delivery" && isEditingAddress) {
-      await handleSaveAsDefault();
-    }
-
     setShowPayment(true);
   };
 
@@ -372,14 +297,20 @@ export default function CheckoutPage() {
         throw new Error("Failed to create order");
       }
 
-      // Clear session/storage before redirecting to Paystack
-      window.sessionStorage.removeItem("aura-luxe-buy-now");
-      window.sessionStorage.removeItem("aura-luxe-checkout-mode");
-      clearGuestBuyNowItem();
-      clearGuestCheckoutDraft();
-      clearGuestCartItems();
+      // Mark order as pending so returning users can resume checkout if Paystack fails
+      try {
+        window.sessionStorage.setItem("aura-luxe-pending-order-id", order.id);
+        if (order.guest_access_token) {
+          window.sessionStorage.setItem(
+            "aura-luxe-pending-order-token",
+            order.guest_access_token || "",
+          );
+        }
+      } catch (e) {
+        // ignore storage errors
+      }
 
-      // Store guest context if guest checkout
+      // Store guest context if guest checkout (keeps token/email persisted)
       if (!user) {
         persistGuestOrderContext({
           orderId: order.id,
@@ -539,35 +470,7 @@ export default function CheckoutPage() {
                   </div>
                 )}
 
-                {/* Saved Address Display */}
-                {savedAddress && !isEditingAddress && (
-                  <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">
-                          Saved Delivery Address
-                        </p>
-                        <div className="mt-2 text-sm text-gray-700 space-y-1">
-                          <p>
-                            {firstName} {lastName}
-                          </p>
-                          <p>{address}</p>
-                          <p>
-                            {town}, {region}
-                          </p>
-                          <p className="text-gray-600">Phone: {phone}</p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleEditAddress}
-                        className="text-blue-600 hover:text-blue-700 text-sm font-medium whitespace-nowrap ml-4"
-                      >
-                        Edit
-                      </button>
-                    </div>
-                  </div>
-                )}
+                {/* Top saved-address summary removed to avoid duplication. */}
 
                 <form onSubmit={handleSubmitShipping} className="space-y-4">
                   {/* Delivery Type Selection */}
@@ -575,7 +478,7 @@ export default function CheckoutPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-3">
                       Delivery Method *
                     </label>
-                    <div className="flex gap-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="radio"
@@ -610,38 +513,6 @@ export default function CheckoutPage() {
                       </label>
                     </div>
                   </div>
-
-                  {/* Saved Address Display */}
-                  {savedAddress &&
-                    !isEditingAddress &&
-                    deliveryType === "delivery" && (
-                      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <p className="text-sm font-semibold text-gray-900">
-                              Delivery Address
-                            </p>
-                            <div className="mt-2 text-sm text-gray-700 space-y-1">
-                              <p>
-                                {firstName} {lastName}
-                              </p>
-                              <p>{address}</p>
-                              <p>
-                                {town}, {region}
-                              </p>
-                              <p className="text-gray-600">Phone: {phone}</p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={handleEditAddress}
-                            className="text-blue-600 hover:text-blue-700 text-sm font-medium whitespace-nowrap ml-4"
-                          >
-                            Edit
-                          </button>
-                        </div>
-                      </div>
-                    )}
 
                   {/* Guest contact info */}
                   {!user && checkoutChoice === "guest" && (
@@ -686,7 +557,7 @@ export default function CheckoutPage() {
                     </>
                   )}
 
-                  {(deliveryType === "pickup" || (!user && checkoutChoice === "guest")) && (
+                  {(deliveryType === "pickup" || deliveryType === "delivery") && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Phone Number *
@@ -892,21 +763,29 @@ export default function CheckoutPage() {
                         {item.product?.name} x{item.quantity_ordered}
                       </span>
                       <div className="text-right">
-                        {item.product?.promo_enabled &&
-                        item.product?.discounted_price ? (
-                          <span className="text-xs text-gray-500 line-through block">
+                        {item.product?.promo_enabled && item.product?.discounted_price ? (
+                          <>
+                            <span className="text-xs text-gray-500 line-through block">
+                              {formatPrice(
+                                (item.product.original_price || item.product.price || 0) *
+                                  item.quantity_ordered,
+                              )}
+                            </span>
+                            <span className="text-gray-900 font-medium block">
+                              {formatPrice(
+                                getEffectiveProductPrice(item.product) *
+                                  item.quantity_ordered,
+                              )}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-gray-900 font-medium">
                             {formatPrice(
-                              (item.product.original_price || item.product.price || 0) *
+                              getEffectiveProductPrice(item.product) *
                                 item.quantity_ordered,
                             )}
                           </span>
-                        ) : null}
-                        <span className="text-gray-900 font-medium">
-                          {formatPrice(
-                            getEffectiveProductPrice(item.product) *
-                              item.quantity_ordered,
-                          )}
-                        </span>
+                        )}
                       </div>
                     </div>
                     <div className="text-xs text-gray-500">
@@ -939,7 +818,7 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      <WhatsAppButton message="Hi Aura Luxe, I need help with checkout." />
+      <WhatsAppButton message="Hi AuraLuxe Extensions, I need help with checkout." />
     </main>
   );
 }

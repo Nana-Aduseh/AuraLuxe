@@ -1,17 +1,21 @@
 import Image from 'next/image'
+import Link from 'next/link'
 import { formatPrice } from '@/lib/currency'
-import { Product, getEffectiveProductPrice } from '@/lib/api'
+import { Product, getProductPricing, slugifyProductName } from '@/lib/api'
 
 interface ProductCardProps {
   product: Product
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
-  const displayPrice = getEffectiveProductPrice(product)
+  const { hasPromo, currentPrice, originalPrice } = getProductPricing(product)
 
   return (
-    <div className="bg-card rounded-xl overflow-hidden shadow-md hover:shadow-2xl transition-all hover:scale-102 border border-border/30 hover:border-primary/30">
-      <div className="relative h-48 md:h-72 bg-muted overflow-hidden group">
+    <Link
+      href={`/extensions/${slugifyProductName(product.name)}`}
+      className="group block bg-card rounded-xl overflow-hidden shadow-md hover:shadow-2xl transition-all hover:scale-102 border border-border/30 hover:border-primary/30"
+    >
+      <div className="relative h-48 md:h-72 bg-muted overflow-hidden">
         {product.image_url ? (
           <Image
             src={product.image_url}
@@ -35,15 +39,19 @@ export default function ProductCard({ product }: ProductCardProps) {
         <p className="text-xs md:text-sm text-foreground/70 mb-3 md:mb-6 line-clamp-2 leading-relaxed">
           {product.description}
         </p>
-        <div className="flex justify-between items-center pt-2 md:pt-4 border-t border-border/30">
-          <span className="text-base md:text-2xl font-bold text-primary">
-            {formatPrice(displayPrice)}
-          </span>
-          <span className="text-xs bg-primary/10 text-primary px-2 md:px-3 py-1 md:py-1.5 rounded-lg font-semibold transition-all hover:bg-primary/20">
-            View
-          </span>
+        <div className="flex justify-between items-end gap-3 pt-2 md:pt-4 border-t border-border/30">
+          <div className="flex flex-col">
+            {hasPromo && originalPrice ? (
+              <span className="text-xs md:text-sm text-foreground/50 line-through">
+                {formatPrice(originalPrice)}
+              </span>
+            ) : null}
+            <span className="text-base md:text-2xl font-bold text-primary">
+              {formatPrice(currentPrice)}
+            </span>
+          </div>
         </div>
       </div>
-    </div>
+    </Link>
   )
 }

@@ -19,6 +19,7 @@ export default function Footer() {
               width={800}
               height={320}
               className="h-40 w-auto"
+              style={{ width: 'auto', height: '10rem' }}
               priority
             />
             <p className="text-primary-foreground/80 text-sm leading-relaxed">

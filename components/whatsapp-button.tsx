@@ -7,7 +7,7 @@ interface WhatsAppButtonProps {
 const WHATSAPP_NUMBER = "233542426135";
 
 export default function WhatsAppButton({
-  message = "Hi Aura Luxe, I want to make an enquiry.",
+  message = "Hi AuraLuxe Extensions, I want to make an enquiry.",
 }: WhatsAppButtonProps) {
   const href = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
 
@@ -16,7 +16,7 @@ export default function WhatsAppButton({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label="Chat with Aura Luxe on WhatsApp"
+      aria-label="Chat with AuraLuxe Extensions on WhatsApp"
       className="no-print fixed bottom-6 right-6 z-50 inline-flex items-center gap-2 rounded-full bg-[#25D366] px-4 py-3 text-white shadow-lg transition hover:scale-105 hover:bg-[#20bd5a]"
     >
       <svg viewBox="0 0 32 32" className="h-5 w-5 fill-current" aria-hidden="true">

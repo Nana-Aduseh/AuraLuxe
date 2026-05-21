@@ -962,6 +962,9 @@ export default function AdminProducts({
                       }
                       placeholder="12"
                     />
+                    <p className="mt-2 text-xs text-gray-500">
+                      Use <span className="font-medium">0</span> to mark this length as out of stock while keeping it orderable.
+                    </p>
                   </div>
                   <div>
                     <Button

@@ -9,14 +9,12 @@ import { Product } from '@/lib/api'
 interface CarouselProps {
   products: Product[]
   title: string
-  onProductClick: (product: Product) => void
   onTitleClick?: () => void
 }
 
 export default function Carousel({
   products,
   title,
-  onProductClick,
   onTitleClick,
 }: CarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -101,11 +99,7 @@ export default function Carousel({
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-6 lg:gap-8">
           {visibleProducts.map((product, index) => (
-            <div
-              key={`${product.id}-${index}`}
-              onClick={() => onProductClick(product)}
-              className="cursor-pointer transition-all hover:scale-105 hover:shadow-lg"
-            >
+            <div key={`${product.id}-${index}`} className="transition-all hover:scale-105 hover:shadow-lg">
               <ProductCard product={product} />
             </div>
           ))}

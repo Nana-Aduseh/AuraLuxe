@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/currency";
 import { CheckCircle, Printer } from "lucide-react";
@@ -13,11 +13,11 @@ import WhatsAppButton from "@/components/whatsapp-button";
 
 export default function OrderConfirmationPage() {
   const params = useParams();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [order, setOrder] = useState<any>(null);
   const [orderItems, setOrderItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const supabase = createClient();
 
   const orderId = params.orderId as string;
@@ -34,7 +34,8 @@ export default function OrderConfirmationPage() {
           guestToken || window.sessionStorage.getItem("aura-luxe-guest-order-token");
 
         if (!token) {
-          router.push("/auth/login");
+          setLoadError("We could not confirm this order after returning from payment.");
+          setLoading(false);
           return;
         }
 
@@ -44,7 +45,8 @@ export default function OrderConfirmationPage() {
         );
 
         if (!response.ok) {
-          router.push("/");
+          setLoadError("This order is not available yet or payment was cancelled.");
+          setLoading(false);
           return;
         }
 
@@ -61,7 +63,8 @@ export default function OrderConfirmationPage() {
 
         setLoading(false);
         return;
-      }
+                    setLoadError("We could not confirm this order after returning from payment.");
+                    setLoading(false);
 
       const { data: orderData, error: orderError } = await supabase
         .from("orders")
@@ -71,7 +74,8 @@ export default function OrderConfirmationPage() {
         .single();
 
       if (orderError || !orderData) {
-        router.push("/");
+        setLoading(false);
+        setLoadError("This order is not available yet or payment was cancelled.");
         return;
       }
 
@@ -97,7 +101,6 @@ export default function OrderConfirmationPage() {
             product_id: item.product_id,
             color_id: item.color_id,
             quantity_id: item.quantity_id,
-            quantity_ordered: item.quantity_ordered,
             quantity: item.quantity,
             price_at_purchase: item.price_at_purchase,
             price: item.price,
@@ -192,7 +195,7 @@ export default function OrderConfirmationPage() {
     };
 
     loadOrder();
-  }, [orderId]);
+  }, [orderId, guestToken]);
 
   // Confirmation emails disabled.
 
@@ -208,6 +211,29 @@ export default function OrderConfirmationPage() {
         </div>
       </main>
     );
+  }
+
+  if (loadError) {
+    return (
+      <main className="min-h-screen bg-white">
+        <div className="max-w-2xl mx-auto px-4 py-16">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
+            <h1 className="text-2xl font-bold text-gray-900 mb-3">
+              Payment not completed
+            </h1>
+            <p className="text-gray-700 mb-6">{loadError}</p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button asChild className="bg-amber-600 hover:bg-amber-700 text-white">
+                <Link href="/checkout">Return to Checkout</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/cart">Back to Cart</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </main>
+    )
   }
 
   if (!order) {
@@ -250,14 +276,15 @@ export default function OrderConfirmationPage() {
             <div className="flex justify-center mb-2">
               <Image
                 src="/aura-luxe-logo.png"
-                alt="Aura Luxe"
+                alt="AuraLuxe Extensions"
                 width={100}
                 height={40}
                 className="h-10 w-auto"
+                style={{ width: 'auto', height: '2.5rem' }}
               />
             </div>
             <h1 className="text-lg font-bold text-gray-900">
-              AURA LUXE EXTENSIONS
+              AuraLuxe Extensions
             </h1>
             <p className="text-xs text-gray-600">
               Premium Quality Hair Extensions
@@ -378,7 +405,7 @@ export default function OrderConfirmationPage() {
         </div>
       </div>
 
-      <WhatsAppButton message="Hi Aura Luxe, I need support for my order." />
+      <WhatsAppButton message="Hi AuraLuxe Extensions, I need support for my order." />
     </main>
   );
 }

@@ -236,10 +236,10 @@ export default function CartPage() {
                   return (
                     <div
                       key={item.id}
-                      className="flex gap-4 p-6 bg-card rounded-lg border border-border/30 shadow-sm hover:shadow-md transition-shadow"
+                      className="flex flex-col sm:flex-row gap-4 p-4 sm:p-6 bg-card rounded-lg border border-border/30 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
                     >
                       {/* Image */}
-                      <div className="w-24 h-24 bg-muted rounded flex-shrink-0 overflow-hidden">
+                      <div className="w-24 h-24 sm:w-24 sm:h-24 bg-muted rounded flex-shrink-0 overflow-hidden self-start">
                         {color.image_url || product.image_url ? (
                           <img
                             src={color.image_url || product.image_url || '/placeholder.png'}
@@ -252,7 +252,7 @@ export default function CartPage() {
                       </div>
 
                       {/* Details */}
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-foreground text-lg">
                           {product.name || 'Unknown Product'}
                         </h3>
@@ -283,7 +283,7 @@ export default function CartPage() {
                       </div>
 
                       {/* Quantity & Actions */}
-                      <div className="flex flex-col items-end justify-between gap-4">
+                      <div className="flex flex-col sm:items-end justify-between gap-4 w-full sm:w-auto">
                         <button
                           onClick={() => handleRemove(item.id)}
                           className="text-destructive hover:text-destructive/80 p-2 transition-colors"
@@ -292,8 +292,8 @@ export default function CartPage() {
                           <Trash2 className="w-5 h-5" />
                         </button>
 
-                        <div className="flex flex-col items-center gap-2">
-                          <div className="flex items-center gap-1 border border-border/30 bg-background rounded">
+                        <div className="flex flex-col items-start sm:items-center gap-2 w-full sm:w-auto">
+                          <div className="flex items-center gap-1 border border-border/30 bg-background rounded w-full sm:w-auto justify-between sm:justify-start">
                             <button
                               onClick={() =>
                                 handleQuantityChange(
@@ -322,7 +322,7 @@ export default function CartPage() {
                               +
                             </button>
                           </div>
-                          <p className="text-xs text-foreground/60">
+                          <p className="text-xs text-foreground/60 text-left sm:text-right w-full">
                             {maxStock - item.quantity_ordered} available
                           </p>
                         </div>

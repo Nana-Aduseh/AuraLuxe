@@ -100,7 +100,7 @@ export default function AdminPage() {
           <div className="flex justify-between items-center h-20">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
-                Aura Luxe Admin
+                AuraLuxe Admin
               </h1>
               <p className="text-sm text-gray-600 mt-1">{user?.email}</p>
             </div>
