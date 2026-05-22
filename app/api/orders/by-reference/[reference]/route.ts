@@ -14,6 +14,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     .from('orders')
     .select('*')
     .eq('payment_reference', reference)
+    .eq('confirmation_status', 'confirmed')
     .maybeSingle()
 
   const { data: orderById, error: idError } = orderByPaymentReference
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         .from('orders')
         .select('*')
         .eq('id', reference)
+        .eq('confirmation_status', 'confirmed')
         .maybeSingle()
 
   if (paymentReferenceError || idError) {

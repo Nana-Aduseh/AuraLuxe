@@ -14,6 +14,7 @@ interface OrderWithDetails {
   delivery_status: string | null;
   created_at: string;
   updated_at: string;
+  completed_at?: string | null;
   user_name?: string;
   user_email?: string;
   order_items?: OrderItem[];
@@ -414,6 +415,16 @@ export default function AdminOrders({ searchQuery = "" }: AdminOrdersProps) {
                               {order.order_type === "delivery"
                                 ? "🚚 Delivery"
                                 : "📍 Pickup"}
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Completed At
+                            </label>
+                            <div className="w-full text-sm px-3 py-2 rounded border font-medium text-center bg-gray-100 border-gray-300 text-gray-700">
+                              {order.completed_at
+                                ? format(new Date(order.completed_at), "PPpp")
+                                : "Pending payment"}
                             </div>
                           </div>
                         </div>

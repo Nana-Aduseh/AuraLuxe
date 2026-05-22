@@ -152,6 +152,7 @@ export async function POST(request: NextRequest) {
           payment_reference: reference,
           status: 'processing',
           confirmation_status: 'confirmed',
+          completed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq('id', existingOrder.id)
@@ -178,6 +179,7 @@ export async function POST(request: NextRequest) {
         payment_reference: reference,
         order_type: checkoutMetadata.delivery_type === 'pickup' ? 'pickup' : 'delivery',
         confirmation_status: 'confirmed',
+        completed_at: new Date().toISOString(),
         guest_access_token: checkoutMetadata.guest_token || null,
         guest_first_name: guestInfo.firstName || null,
         guest_last_name: guestInfo.lastName || null,

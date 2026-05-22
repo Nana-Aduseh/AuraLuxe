@@ -27,6 +27,7 @@ export async function GET() {
   const { data: orders, error: ordersError } = await dataClient
     .from("orders")
     .select("*")
+    .eq("confirmation_status", "confirmed")
     .order("created_at", { ascending: false });
 
   if (ordersError) {

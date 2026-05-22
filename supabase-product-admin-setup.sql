@@ -11,6 +11,7 @@ as $$
     where id = auth.uid()
       and is_admin = true
   );
+      and confirmation_status = 'confirmed';
 $$;
 
 grant execute on function public.is_admin_user() to authenticated, anon;
@@ -163,6 +164,7 @@ create table if not exists public.orders (
   guest_address text,
   guest_town text,
   guest_region text,
+  completed_at timestamp with time zone,
   created_at timestamp with time zone default timezone('utc'::text, now()),
   updated_at timestamp with time zone default timezone('utc'::text, now())
 );
@@ -178,7 +180,8 @@ alter table public.orders
   add column if not exists guest_town text,
   add column if not exists guest_region text,
   add column if not exists order_type text default 'delivery' check (order_type in ('delivery', 'pickup')),
-  add column if not exists confirmation_status text default 'not_confirmed' check (confirmation_status in ('not_confirmed', 'confirmed'));
+  add column if not exists confirmation_status text default 'not_confirmed' check (confirmation_status in ('not_confirmed', 'confirmed')),
+  add column if not exists completed_at timestamp with time zone;
 
 alter table public.orders enable row level security;
 
@@ -530,7 +533,8 @@ begin
   into order_row
   from public.orders
   where id = p_order_id
-    and guest_access_token = p_token;
+    and guest_access_token = p_token
+    and confirmation_status = 'confirmed';
 
   if not found then
     return null;
@@ -610,6 +614,7 @@ begin
     set user_id = current_user_id,
         updated_at = timezone('utc'::text, now())
     where o.user_id is null
+      and o.confirmation_status = 'confirmed'
       and (
         (current_email is not null and lower(btrim(coalesce(o.guest_email, ''))) = lower(btrim(current_email)))
         or (p_guest_token is not null and o.guest_access_token = p_guest_token)
@@ -657,12 +662,15 @@ begin
         order by o.created_at desc
       )
       from public.orders o
-      where o.user_id = current_user_id
-        or (
-          current_email is not null
-          and lower(btrim(coalesce(o.guest_email, ''))) = lower(btrim(current_email))
+      where o.confirmation_status = 'confirmed'
+        and (
+          o.user_id = current_user_id
+          or (
+            current_email is not null
+            and lower(btrim(coalesce(o.guest_email, ''))) = lower(btrim(current_email))
+          )
+          or (p_guest_token is not null and o.guest_access_token = p_guest_token)
         )
-        or (p_guest_token is not null and o.guest_access_token = p_guest_token)
     ),
     '[]'::jsonb
   );
