@@ -40,6 +40,33 @@ const GHANA_REGIONS = [
   "Western North",
 ];
 
+const CHECKOUT_STATE_KEY = "aura-luxe-checkout-state-v2";
+
+function readCheckoutState() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(CHECKOUT_STATE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCheckoutState(state: Record<string, unknown>) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(CHECKOUT_STATE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export default function CheckoutPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,6 +148,26 @@ export default function CheckoutPage() {
         await syncGuestDraftToUser(user.id);
       }
 
+      const restoredState = readCheckoutState();
+      if (restoredState) {
+        if (typeof restoredState.firstName === "string") setFirstName(restoredState.firstName);
+        if (typeof restoredState.lastName === "string") setLastName(restoredState.lastName);
+        if (typeof restoredState.email === "string" && !user) setEmail(restoredState.email);
+        if (typeof restoredState.address === "string") setAddress(restoredState.address);
+        if (typeof restoredState.town === "string") setTown(restoredState.town);
+        if (typeof restoredState.region === "string") setRegion(restoredState.region);
+        if (typeof restoredState.phone === "string") setPhone(restoredState.phone);
+        if (restoredState.deliveryType === "pickup" || restoredState.deliveryType === "delivery") {
+          setDeliveryType(restoredState.deliveryType);
+        }
+        if (restoredState.checkoutChoice === "guest" || restoredState.checkoutChoice === "account") {
+          setCheckoutChoice(restoredState.checkoutChoice);
+        }
+        if (typeof restoredState.showPayment === "boolean") {
+          setShowPayment(restoredState.showPayment);
+        }
+      }
+
       if (mode === "buy-now") {
         const savedBuyNowItem =
           window.sessionStorage.getItem("aura-luxe-buy-now");
@@ -198,6 +245,41 @@ export default function CheckoutPage() {
 
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    saveCheckoutState({
+      firstName,
+      lastName,
+      email,
+      address,
+      town,
+      region,
+      phone,
+      deliveryType,
+      checkoutChoice,
+      showPayment,
+      checkoutMode,
+      isGuestFlow,
+    });
+  }, [
+    loading,
+    firstName,
+    lastName,
+    email,
+    address,
+    town,
+    region,
+    phone,
+    deliveryType,
+    checkoutChoice,
+    showPayment,
+    checkoutMode,
+    isGuestFlow,
+  ]);
 
   const total = cartItems.reduce((sum, item) => {
     const product = item.product || {};

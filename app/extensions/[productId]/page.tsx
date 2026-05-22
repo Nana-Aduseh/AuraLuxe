@@ -183,6 +183,7 @@ export default function ProductDetailPage() {
                   src={displayImageUrl}
                   alt={selectedColorData?.color_name ? `${product.name} - ${selectedColorData.color_name}` : product.name}
                   fill
+                  sizes="(max-width: 1024px) 100vw, 50vw"
                   className="object-cover"
                   priority
                 />
@@ -205,7 +206,6 @@ export default function ProductDetailPage() {
               ) : (
                 <span className="text-3xl font-bold text-amber-700">{formatPrice(pricing.currentPrice)}</span>
               )}
-              <p className="text-sm text-foreground/60 mt-2">Price updates automatically with quantity selection below.</p>
             </div>
 
             {selectedQtyData && (
