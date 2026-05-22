@@ -6,6 +6,7 @@ export interface PaystackInitPayload {
   reference?: string
   callback_url?: string
   orderId?: string
+  metadata?: Record<string, unknown>
 }
 
 async function fetchWithRetry(url: string, init: RequestInit, retries = 1, timeoutMs = 20000) {
@@ -47,6 +48,7 @@ export async function initializePaystackTransaction(payload: PaystackInitPayload
     amount: Math.round((payload.amountGhs || 0) * 100), // amount in Kobo
     reference: payload.reference,
     callback_url: payload.callback_url,
+    metadata: payload.metadata,
   }
 
   const res = await fetchWithRetry('https://api.paystack.co/transaction/initialize', {

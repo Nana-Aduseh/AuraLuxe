@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { formatPrice } from "@/lib/currency";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { getCart, createOrder, CartItem, getEffectiveProductPrice } from "@/lib/api";
+import { getCart, CartItem, getEffectiveProductPrice } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { persistGuestOrderContext } from "@/lib/guest-orders";
 import WhatsAppButton from "@/components/whatsapp-button";
@@ -273,61 +273,82 @@ export default function CheckoutPage() {
     setProcessing(true);
 
     try {
-      // Create order first
-      const order = await createOrder(
-        user?.id || null,
-        cartItems,
-        total,
-        deliveryType,
-        checkoutMode !== "buy-now",
-        user
-          ? undefined
-          : {
-              firstName,
-              lastName,
-              email,
-              phone,
-              address,
-              town,
-              region,
-            },
-      );
+      const checkoutReference = `PAY-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const guestToken = user
+        ? null
+        : window.crypto?.randomUUID?.() || `guest-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-      if (!order) {
-        throw new Error("Failed to create order");
-      }
+      const serializedCartItems = cartItems.map((item) => ({
+        product_id: item.product_id,
+        color_id: item.color_id,
+        quantity_id: item.quantity_id,
+        quantity_ordered: item.quantity_ordered || 1,
+        price_at_purchase: getEffectiveProductPrice(item.product),
+      }));
 
-      // Mark order as pending so returning users can resume checkout if Paystack fails
+      const guestInfo = user
+        ? null
+        : {
+            firstName,
+            lastName,
+            email,
+            phone,
+            address,
+            town,
+            region,
+          };
+
       try {
-        window.sessionStorage.setItem("aura-luxe-pending-order-id", order.id);
-        if (order.guest_access_token) {
+        window.sessionStorage.setItem(
+          "aura-luxe-pending-payment-reference",
+          checkoutReference,
+        );
+        if (guestToken) {
           window.sessionStorage.setItem(
-            "aura-luxe-pending-order-token",
-            order.guest_access_token || "",
+            "aura-luxe-pending-payment-token",
+            guestToken,
           );
         }
       } catch (e) {
         // ignore storage errors
       }
 
-      // Store guest context if guest checkout (keeps token/email persisted)
-      if (!user) {
+      // Preserve the guest token/email locally so the confirmation page can recover after redirect.
+      if (!user && guestToken) {
         persistGuestOrderContext({
-          orderId: order.id,
-          token: order.guest_access_token || "",
+          token: guestToken,
           email,
         });
       }
 
-      // Initialize Paystack transaction
+      // Initialize Paystack transaction with the entire checkout payload.
+      const callbackUrl = `${window.location.origin}/order-confirmation/${checkoutReference}${guestToken ? `?token=${encodeURIComponent(guestToken)}` : ""}`;
+
+      // Keep a local pointer to the pending checkout in case the redirect is interrupted.
+      try {
+        window.sessionStorage.setItem("aura-luxe-pending-checkout-email", email);
+      } catch (e) {
+        // ignore storage errors
+      }
+
       const paystackRes = await fetch("/api/paystack/initialize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: user?.email || email,
           amountGhs: total,
-          orderId: order.id,
-          callback_url: `${window.location.origin}/order-confirmation/${order.id}`,
+          reference: checkoutReference,
+          callback_url: callbackUrl,
+          metadata: {
+            checkout_reference: checkoutReference,
+            guest_token: guestToken,
+            user_id: user?.id || null,
+            delivery_type: deliveryType,
+            guest_info: guestInfo,
+            cart_items: serializedCartItems,
+            total_amount: total,
+            order_mode: checkoutMode,
+          },
         }),
       });
 

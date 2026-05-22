@@ -24,187 +24,166 @@ export default function OrderConfirmationPage() {
   const guestToken = searchParams.get("guestToken") || searchParams.get("token");
 
   useEffect(() => {
+    let cancelled = false;
+
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
     const loadOrder = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const fallbackToken =
+        guestToken ||
+        window.sessionStorage.getItem("aura-luxe-guest-order-token") ||
+        window.sessionStorage.getItem("aura-luxe-pending-payment-token");
 
-      if (!user) {
-        const token =
-          guestToken || window.sessionStorage.getItem("aura-luxe-guest-order-token");
+      const tokenQuery = fallbackToken ? `?token=${encodeURIComponent(fallbackToken)}` : "";
 
-        if (!token) {
-          setLoadError("We could not confirm this order after returning from payment.");
-          setLoading(false);
-          return;
-        }
+      for (let attempt = 0; attempt < 24 && !cancelled; attempt += 1) {
+        try {
+          const response = await fetch(
+            `/api/orders/by-reference/${encodeURIComponent(orderId)}${tokenQuery}`,
+            { cache: "no-store" },
+          );
 
-        const response = await fetch(
-          `/api/orders/guest/${orderId}?token=${encodeURIComponent(token)}`,
-          { cache: "no-store" },
-        );
+          if (response.ok) {
+            const payload = await response.json();
 
-        if (!response.ok) {
-          setLoadError("This order is not available yet or payment was cancelled.");
-          setLoading(false);
-          return;
-        }
-
-        const payload = await response.json();
-        if (payload.order?.confirmation_status !== "confirmed") {
-          setLoadError("This order is not available yet or payment was cancelled.");
-          setLoading(false);
-          return;
-        }
-        setOrder(payload.order);
-        setOrderItems(payload.items || []);
-        persistGuestOrderContext({
-          orderId,
-          token,
-          email: payload.order?.guest_email || null,
-        });
-
-        // Email sending disabled — no action taken here.
-
-        setLoading(false);
-        return;
-      }
-
-      const { data: orderData, error: orderError } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("id", orderId)
-        .eq("user_id", user.id)
-        .single();
-
-      if (orderError || !orderData) {
-        setLoading(false);
-        setLoadError("This order is not available yet or payment was cancelled.");
-        return;
-      }
-
-      if (orderData.confirmation_status !== "confirmed") {
-        setLoading(false);
-        setLoadError("This order is not available yet or payment was cancelled.");
-        return;
-      }
-
-      setOrder(orderData);
-
-      const { data: itemsData, error: itemsError } = await supabase
-        .from("order_items")
-        .select("*")
-        .eq("order_id", orderId);
-
-      if (itemsError) {
-        console.error("Error loading order items:", itemsError);
-      }
-
-      if (itemsData) {
-        console.log("Order items data:", itemsData);
-        console.log("Item count:", itemsData.length);
-
-        // Log each item to see which fields are present
-        itemsData.forEach((item, index) => {
-          console.log(`Item ${index}:`, {
-            id: item.id,
-            product_id: item.product_id,
-            color_id: item.color_id,
-            quantity_id: item.quantity_id,
-            quantity: item.quantity,
-            price_at_purchase: item.price_at_purchase,
-            price: item.price,
-          });
-        });
-
-        // Load product details for each item
-        const enrichedItems = await Promise.all(
-          itemsData.map(async (item: any) => {
-            try {
-              // Load product
-              const { data: productData, error: productError } = await supabase
-                .from("products")
-                .select("id, name, price")
-                .eq("id", item.product_id)
-                .single();
-
-              if (productError)
-                console.error("Error loading product:", productError);
-              else
-                console.log(
-                  `Product loaded for item ${item.product_id}:`,
-                  productData,
-                );
-
-              // Load color if color_id exists
-              let colorData = null;
-              if (item.color_id) {
-                const { data: colorRes, error: colorError } = await supabase
-                  .from("product_colors")
-                  .select("color_name")
-                  .eq("id", item.color_id)
-                  .single();
-
-                if (colorError)
-                  console.warn("Error loading color:", colorError);
-                else {
-                  colorData = colorRes;
-                  console.log(
-                    `Color loaded for item ${item.color_id}:`,
-                    colorData,
-                  );
-                }
-              }
-
-              // Load quantity if quantity_id exists
-              let quantityData = null;
-              if (item.quantity_id) {
-                const { data: quantityRes, error: quantityError } =
-                  await supabase
-                    .from("product_quantities")
-                    .select("length_inches")
-                    .eq("id", item.quantity_id)
-                    .single();
-
-                if (quantityError)
-                  console.warn("Error loading quantity:", quantityError);
-                else {
-                  quantityData = quantityRes;
-                  console.log(
-                    `Quantity loaded for item ${item.quantity_id}:`,
-                    quantityData,
-                  );
-                }
-              }
-
-              return {
-                ...item,
-                product: productData,
-                color: colorData,
-                quantity_data: quantityData,
-              };
-            } catch (err) {
-              console.error("Error enriching item:", err);
-              return {
-                ...item,
-                product: null,
-                color: null,
-                quantity_data: null,
-              };
+            if (!payload.order || payload.order.confirmation_status !== "confirmed") {
+              await wait(2000);
+              continue;
             }
-          }),
-        );
 
-        console.log("Enriched items:", enrichedItems);
-        setOrderItems(enrichedItems);
+            setOrder(payload.order);
+            persistGuestOrderContext({
+              orderId: payload.order.id,
+              token: payload.order.guest_access_token || fallbackToken,
+              email: payload.order.guest_email || null,
+            });
+
+            const itemsData = Array.isArray(payload.items) ? payload.items : [];
+
+            if (itemsData.length > 0) {
+              console.log("Order items data:", itemsData);
+              console.log("Item count:", itemsData.length);
+
+              itemsData.forEach((item, index) => {
+                console.log(`Item ${index}:`, {
+                  id: item.id,
+                  product_id: item.product_id,
+                  color_id: item.color_id,
+                  quantity_id: item.quantity_id,
+                  quantity: item.quantity,
+                  price_at_purchase: item.price_at_purchase,
+                  price: item.price,
+                });
+              });
+
+              const enrichedItems = await Promise.all(
+                itemsData.map(async (item: any) => {
+                  try {
+                    const { data: productData, error: productError } = await supabase
+                      .from("products")
+                      .select("id, name, price")
+                      .eq("id", item.product_id)
+                      .single();
+
+                    if (productError)
+                      console.error("Error loading product:", productError);
+                    else
+                      console.log(
+                        `Product loaded for item ${item.product_id}:`,
+                        productData,
+                      );
+
+                    let colorData = null;
+                    if (item.color_id) {
+                      const { data: colorRes, error: colorError } = await supabase
+                        .from("product_colors")
+                        .select("color_name")
+                        .eq("id", item.color_id)
+                        .single();
+
+                      if (colorError)
+                        console.warn("Error loading color:", colorError);
+                      else {
+                        colorData = colorRes;
+                        console.log(
+                          `Color loaded for item ${item.color_id}:`,
+                          colorData,
+                        );
+                      }
+                    }
+
+                    let quantityData = null;
+                    if (item.quantity_id) {
+                      const { data: quantityRes, error: quantityError } =
+                        await supabase
+                          .from("product_quantities")
+                          .select("length_inches")
+                          .eq("id", item.quantity_id)
+                          .single();
+
+                      if (quantityError)
+                        console.warn("Error loading quantity:", quantityError);
+                      else {
+                        quantityData = quantityRes;
+                        console.log(
+                          `Quantity loaded for item ${item.quantity_id}:`,
+                          quantityData,
+                        );
+                      }
+                    }
+
+                    return {
+                      ...item,
+                      product: productData,
+                      color: colorData,
+                      quantity_data: quantityData,
+                    };
+                  } catch (err) {
+                    console.error("Error enriching item:", err);
+                    return {
+                      ...item,
+                      product: null,
+                      color: null,
+                      quantity_data: null,
+                    };
+                  }
+                }),
+              );
+
+              console.log("Enriched items:", enrichedItems);
+              setOrderItems(enrichedItems);
+            } else {
+              setOrderItems([]);
+            }
+
+            setLoading(false);
+            return;
+          }
+
+          if (response.status !== 404) {
+            const payload = await response.json().catch(() => null);
+            throw new Error(payload?.error || "Failed to load order");
+          }
+        } catch (err) {
+          if (!cancelled) {
+            console.error("Error loading order:", err);
+          }
+        }
+
+        await wait(2500);
       }
 
-      // Email sending disabled — no action taken here.
-
-      setLoading(false);
+      if (!cancelled) {
+        setLoadError("This order is still being verified. Please refresh in a moment.");
+        setLoading(false);
+      }
     };
 
     loadOrder();
+
+    return () => {
+      cancelled = true;
+    };
   }, [orderId, guestToken]);
 
   // Confirmation emails disabled.
