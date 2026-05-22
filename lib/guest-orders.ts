@@ -85,5 +85,7 @@ export async function fetchAccessibleOrdersAfterAuth(token?: string | null) {
     throw error
   }
 
-  return Array.isArray(data) ? data : []
+  return Array.isArray(data)
+    ? data.filter((order) => order?.confirmation_status === 'confirmed')
+    : []
 }

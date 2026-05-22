@@ -126,6 +126,13 @@
 
 /* Print styles for order receipt */
 @media print {
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+  }
+
   /* Hide elements that shouldn't be printed */
   .no-print,
   header,
@@ -142,11 +149,16 @@
     color: black;
   }
 
+  .min-h-screen {
+    min-height: auto !important;
+  }
+
   main {
     width: 100%;
     max-width: 100%;
     margin: 0;
     padding: 0;
+    min-height: auto !important;
   }
 
   .max-w-2xl {

@@ -8,6 +8,36 @@ export interface PaystackInitPayload {
   orderId?: string
 }
 
+async function fetchWithRetry(url: string, init: RequestInit, retries = 1, timeoutMs = 20000) {
+  let lastError: unknown = null
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+    try {
+      const response = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+      return response
+    } catch (error) {
+      clearTimeout(timeoutId)
+      lastError = error
+
+      if (attempt < retries) {
+        continue
+      }
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Request to Paystack failed')
+}
+
 export async function initializePaystackTransaction(payload: PaystackInitPayload) {
   const secret = process.env.PAYSTACK_SECRET_KEY
   if (!secret) throw new Error('PAYSTACK_SECRET_KEY is not configured')
@@ -19,7 +49,7 @@ export async function initializePaystackTransaction(payload: PaystackInitPayload
     callback_url: payload.callback_url,
   }
 
-  const res = await fetch('https://api.paystack.co/transaction/initialize', {
+  const res = await fetchWithRetry('https://api.paystack.co/transaction/initialize', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${secret}`,
@@ -40,11 +70,14 @@ export async function verifyPaystackTransaction(reference: string) {
   const secret = process.env.PAYSTACK_SECRET_KEY
   if (!secret) throw new Error('PAYSTACK_SECRET_KEY is not configured')
 
-  const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-    headers: {
-      Authorization: `Bearer ${secret}`,
+  const res = await fetchWithRetry(
+    `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${secret}`,
+      },
     },
-  })
+  )
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')

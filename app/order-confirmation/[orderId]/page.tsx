@@ -51,6 +51,11 @@ export default function OrderConfirmationPage() {
         }
 
         const payload = await response.json();
+        if (payload.order?.confirmation_status !== "confirmed") {
+          setLoadError("This order is not available yet or payment was cancelled.");
+          setLoading(false);
+          return;
+        }
         setOrder(payload.order);
         setOrderItems(payload.items || []);
         persistGuestOrderContext({
@@ -73,6 +78,12 @@ export default function OrderConfirmationPage() {
         .single();
 
       if (orderError || !orderData) {
+        setLoading(false);
+        setLoadError("This order is not available yet or payment was cancelled.");
+        return;
+      }
+
+      if (orderData.confirmation_status !== "confirmed") {
         setLoading(false);
         setLoadError("This order is not available yet or payment was cancelled.");
         return;

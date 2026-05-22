@@ -44,7 +44,7 @@ export default function OrdersPage() {
         const ordersData = await fetchAccessibleOrdersAfterAuth()
 
         if (ordersData) {
-          setOrders(ordersData as Order[])
+          setOrders(ordersData.filter((order: Order) => order.confirmation_status === 'confirmed') as Order[])
         }
       } catch (ordersError) {
         console.error('Failed to load accessible orders:', ordersError)
