@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { verifyPaystackTransaction } from '@/lib/paystack'
+import { enrichOrderItemsForDisplay } from '@/lib/order-item-display'
 
 interface RouteParams {
   params: Promise<{ reference: string }>
@@ -9,6 +11,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const supabase = createAdminClient()
   const { reference } = await params
   const token = request.nextUrl.searchParams.get('token')
+  const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(reference)
+
+  if (!supabase) {
+    console.error('Supabase admin client not configured (SUPABASE_SERVICE_ROLE_KEY missing)')
+    return NextResponse.json({ error: 'Supabase admin client not configured' }, { status: 500 })
+  }
 
   const { data: orderByPaymentReference, error: paymentReferenceError } = await supabase
     .from('orders')
@@ -17,7 +25,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     .eq('confirmation_status', 'confirmed')
     .maybeSingle()
 
-  const { data: orderById, error: idError } = orderByPaymentReference
+  const { data: orderById, error: idError } = orderByPaymentReference || !looksLikeUuid
     ? { data: null, error: null }
     : await supabase
         .from('orders')
@@ -33,6 +41,25 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const order = orderByPaymentReference || orderById
 
   if (!order) {
+    // If no confirmed order found, attempt to verify the payment with Paystack
+    try {
+      const verify = await verifyPaystackTransaction(reference)
+      const payData = verify?.data
+
+      if (payData && payData.status === 'success') {
+        const metadata = (payData.metadata || {}) as any
+        const cartItems = Array.isArray(metadata.cart_items) ? metadata.cart_items : []
+        const displayItems = await enrichOrderItemsForDisplay(supabase, cartItems)
+
+        // If Paystack says the transaction succeeded, return the verification payload
+        // to the client but do not create or update DB entries here. The client
+        // will call the finalize endpoint to persist the order when appropriate.
+        return NextResponse.json({ verified: true, payData, items: displayItems })
+      }
+    } catch (err) {
+      console.error('Verification check failed:', err)
+    }
+
     return NextResponse.json({ error: 'Order not found' }, { status: 404 })
   }
 
@@ -45,5 +72,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     .select('*')
     .eq('order_id', order.id)
 
-  return NextResponse.json({ order, items: items || [] })
+  const displayItems = await enrichOrderItemsForDisplay(supabase, items || [])
+
+  return NextResponse.json({ order, items: displayItems })
 }

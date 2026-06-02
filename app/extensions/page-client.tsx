@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
-  getProducts,
+  getProductsByType,
   Product,
 } from '@/lib/api'
 import ProductCard from '@/components/product-card'
@@ -26,7 +26,7 @@ export default function ExtensionsPageClient() {
   useEffect(() => {
     const loadProducts = async () => {
       try {
-        const data = await getProducts()
+        const data = await getProductsByType('extension')
         setProducts(data)
         setFilteredProducts(data)
       } catch (error) {

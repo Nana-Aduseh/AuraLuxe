@@ -75,6 +75,8 @@ export default function CheckoutPage() {
   const [checkoutChoice, setCheckoutChoice] = useState<"guest" | "account">("guest");
   const [isGuestFlow, setIsGuestFlow] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
+  const [paystackAuthUrl, setPaystackAuthUrl] = useState<string | null>(null);
+  const [pendingCheckoutReference, setPendingCheckoutReference] = useState<string | null>(null);
   const [deliveryType, setDeliveryType] = useState<"delivery" | "pickup">(
     "delivery",
   );
@@ -346,11 +348,17 @@ export default function CheckoutPage() {
       });
     }
 
+    setPaystackAuthUrl(null);
+    setPendingCheckoutReference(null);
     setShowPayment(true);
   };
 
-  const handlePayment = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handlePayment = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+
+    if (processing) {
+      return;
+    }
 
     setProcessing(true);
 
@@ -421,6 +429,9 @@ export default function CheckoutPage() {
           amountGhs: total,
           reference: checkoutReference,
           callback_url: callbackUrl,
+          firstname: firstName || user?.user_metadata?.full_name?.split(" ")?.[0] || firstName,
+          lastname: lastName || user?.user_metadata?.full_name?.split(" ")?.slice(1).join(" ") || lastName,
+          phone,
           metadata: {
             checkout_reference: checkoutReference,
             guest_token: guestToken,
@@ -446,8 +457,10 @@ export default function CheckoutPage() {
         throw new Error("No authorization URL from Paystack");
       }
 
-      // Redirect user to Paystack checkout
-      window.location.href = authorizationUrl;
+      // Show caution panel before redirecting to Paystack
+      setPaystackAuthUrl(authorizationUrl);
+      setPendingCheckoutReference(checkoutReference);
+      setProcessing(false);
     } catch (error) {
       console.error("Payment error:", error);
       const message = error instanceof Error ? error.message : "";
@@ -455,6 +468,14 @@ export default function CheckoutPage() {
       setProcessing(false);
     }
   };
+
+  useEffect(() => {
+    if (!showPayment || paystackAuthUrl || processing) {
+      return;
+    }
+
+    handlePayment().catch(() => null);
+  }, [showPayment, paystackAuthUrl, processing]);
 
   if (loading) {
     return (
@@ -823,10 +844,16 @@ export default function CheckoutPage() {
                   </p>
                 </div>
 
-                <form onSubmit={handlePayment} className="space-y-4">
-                  <div className="bg-blue-50 border border-blue-200 rounded p-4">
-                    <p className="text-sm text-blue-800">
+                <div className="space-y-4">
+                  <div className="rounded border border-yellow-300 bg-yellow-50 p-4">
+                    <p className="text-sm font-semibold text-yellow-900">
+                      Caution
+                    </p>
+                    <p className="mt-2 text-sm text-yellow-900">
                       ✓ Click "Proceed to Payment" to securely pay via Paystack using Mobile Money (MTN, Vodafone, Airtel) or Card.
+                    </p>
+                    <p className="mt-2 text-sm text-yellow-900">
+                      If you do not receive the verification code via SMS, wait for the timer to pass and then use the WhatsApp option below to receive it there instead.
                     </p>
                   </div>
 
@@ -840,13 +867,20 @@ export default function CheckoutPage() {
                   </div>
 
                   <Button
-                    type="submit"
-                    disabled={processing}
+                    type="button"
+                    disabled={processing || !paystackAuthUrl}
+                    onClick={() => {
+                      if (paystackAuthUrl) {
+                        window.location.href = paystackAuthUrl;
+                      }
+                    }}
                     className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-lg"
                   >
-                    {processing ? "Redirecting to Payment..." : "Proceed to Payment"}
+                    {processing ? "Preparing Payment..." : "Proceed to Payment"}
                   </Button>
-                </form>
+                </div>
+
+                {/* Post-init helper panel intentionally removed; WhatsApp resend is shown on the redirect/verification page */}
               </div>
             )}
           </div>

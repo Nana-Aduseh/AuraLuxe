@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatPrice } from "@/lib/currency";
-import { Product, getProductDetails } from "@/lib/api";
+import { Product, ProductImage, getProductDetails } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { Check, Edit2, Plus, Trash2, X } from "lucide-react";
 
@@ -23,7 +23,16 @@ interface ProductQuantityForm {
   stock_quantity: string;
 }
 
+interface ProductGalleryImageForm {
+  id?: string;
+  image_url: string;
+  image_file: File | null;
+  image_preview_url: string;
+  sort_order: number;
+}
+
 interface ProductFormState {
+  product_type: "extension" | "product";
   name: string;
   description: string;
   price: string;
@@ -34,9 +43,10 @@ interface ProductFormState {
   base_image_file: File | null;
   base_image_preview_url: string;
   is_trending: boolean;
-  is_newest: boolean;
+  simple_stock: string;
   colors: ProductColorForm[];
   quantities: ProductQuantityForm[];
+  gallery_images: ProductGalleryImageForm[];
 }
 
 const DEFAULT_COLOR_HEX = "#8b5a3c";
@@ -58,8 +68,18 @@ function createEmptyQuantity(): ProductQuantityForm {
   };
 }
 
+function createEmptyGalleryImage(sortOrder: number): ProductGalleryImageForm {
+  return {
+    image_url: "",
+    image_file: null,
+    image_preview_url: "",
+    sort_order: sortOrder,
+  };
+}
+
 function createEmptyForm(): ProductFormState {
   return {
+    product_type: "extension",
     name: "",
     description: "",
     price: "",
@@ -70,9 +90,10 @@ function createEmptyForm(): ProductFormState {
     base_image_file: null,
     base_image_preview_url: "",
     is_trending: false,
-    is_newest: false,
+    simple_stock: "",
     colors: [createEmptyColor()],
     quantities: [createEmptyQuantity()],
+    gallery_images: [],
   };
 }
 
@@ -232,6 +253,7 @@ export default function AdminProducts({
       }
 
       setFormData({
+        product_type: details.product.product_type || "extension",
         name: details.product.name,
         description: details.product.description || "",
         price: details.product.price.toString(),
@@ -248,7 +270,20 @@ export default function AdminProducts({
         base_image_file: null,
         base_image_preview_url: details.product.image_url || "",
         is_trending: details.product.is_trending,
-        is_newest: details.product.is_newest,
+        simple_stock:
+          details.quantities.length > 0
+            ? details.quantities[0].stock_quantity.toString()
+            : "",
+        gallery_images:
+          ((details as { productImages?: ProductImage[] }).productImages || []).map(
+            (image, index) => ({
+              id: image.id,
+              image_url: image.image_url,
+              image_file: null,
+              image_preview_url: image.image_url,
+              sort_order: image.sort_order ?? index,
+            }),
+          ),
         colors:
           details.colors.length > 0
             ? details.colors.map((color) => ({
@@ -310,6 +345,9 @@ export default function AdminProducts({
     const hasAnyImage =
       Boolean(formData.base_image_file) ||
       Boolean(formData.image_url) ||
+      formData.gallery_images.some(
+        (image) => Boolean(image.image_file) || Boolean(image.image_url),
+      ) ||
       formData.colors.some(
         (color) => Boolean(color.image_file) || Boolean(color.image_url),
       );
@@ -319,23 +357,35 @@ export default function AdminProducts({
       return false;
     }
 
-    const validColors = formData.colors.filter((color) =>
-      color.color_name.trim(),
-    );
+    if (formData.product_type === "extension") {
+      const validColors = formData.colors.filter((color) =>
+        color.color_name.trim(),
+      );
 
-    if (validColors.length === 0) {
-      alert("Please add at least one color.");
-      return false;
-    }
+      if (validColors.length === 0) {
+        alert("Please add at least one color.");
+        return false;
+      }
 
-    const validQuantities = formData.quantities.filter(
-      (quantity) =>
-        quantity.length_inches.trim() && quantity.stock_quantity.trim(),
-    );
+      const validQuantities = formData.quantities.filter(
+        (quantity) =>
+          quantity.length_inches.trim() && quantity.stock_quantity.trim(),
+      );
 
-    if (validQuantities.length === 0) {
-      alert("Please add at least one inventory row with length and stock.");
-      return false;
+      if (validQuantities.length === 0) {
+        alert("Please add at least one inventory row with length and stock.");
+        return false;
+      }
+    } else {
+      if (!formData.simple_stock.trim() || Number.isNaN(Number(formData.simple_stock))) {
+        alert("Please enter a valid stock quantity for this product.");
+        return false;
+      }
+
+      if (Number(formData.simple_stock) < 0) {
+        alert("Stock quantity cannot be negative.");
+        return false;
+      }
     }
 
     return true;
@@ -343,7 +393,7 @@ export default function AdminProducts({
 
   const uploadImage = async (
     productId: string,
-    folder: "products" | "colors",
+    folder: "products" | "colors" | "gallery",
     file: File,
   ) => {
     const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
@@ -366,10 +416,92 @@ export default function AdminProducts({
     return data.publicUrl;
   };
 
-  const syncColors = async (productId: string) => {
-    const validColors = formData.colors.filter((color) =>
-      color.color_name.trim(),
+  const syncGalleryImages = async (productId: string) => {
+    const validImages = formData.gallery_images.filter(
+      (image) => Boolean(image.image_file) || Boolean(image.image_url),
     );
+
+    const { data: existingImages } = await supabase
+      .from("product_images")
+      .select("id")
+      .eq("product_id", productId);
+
+    const savedImageIds: string[] = [];
+    const savedImageUrls: string[] = [];
+
+    for (let index = 0; index < validImages.length; index += 1) {
+      const image = validImages[index];
+      const imageUrl = image.image_file
+        ? await uploadImage(productId, "gallery", image.image_file)
+        : image.image_url || null;
+
+      const payload = {
+        product_id: productId,
+        image_url: imageUrl,
+        sort_order: index,
+      };
+
+      if (image.id) {
+        const { error } = await supabase
+          .from("product_images")
+          .update(payload)
+          .eq("id", image.id);
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        savedImageIds.push(image.id);
+      } else {
+        const { data, error } = await supabase
+          .from("product_images")
+          .insert(payload)
+          .select("id")
+          .single();
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        if (data?.id) {
+          savedImageIds.push(data.id);
+        }
+      }
+
+      if (imageUrl) {
+        savedImageUrls.push(imageUrl);
+      }
+    }
+
+    const idsToDelete = (existingImages ?? [])
+      .map((image) => image.id)
+      .filter((id) => !savedImageIds.includes(id));
+
+    if (idsToDelete.length > 0) {
+      const { error } = await supabase
+        .from("product_images")
+        .delete()
+        .in("id", idsToDelete);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+    }
+
+    return savedImageUrls;
+  };
+
+  const syncColors = async (productId: string) => {
+    const validColors =
+      formData.product_type === "product"
+        ? [
+            {
+              ...(formData.colors[0] || createEmptyColor()),
+              color_name: (formData.colors[0]?.color_name || "Default").trim() || "Default",
+              color_hex: formData.colors[0]?.color_hex || DEFAULT_COLOR_HEX,
+            },
+          ]
+        : formData.colors.filter((color) => color.color_name.trim());
     const { data: existingColors } = await supabase
       .from("product_colors")
       .select("id")
@@ -441,10 +573,19 @@ export default function AdminProducts({
   };
 
   const syncQuantities = async (productId: string) => {
-    const validQuantities = formData.quantities.filter(
-      (quantity) =>
-        quantity.length_inches.trim() && quantity.stock_quantity.trim(),
-    );
+    const validQuantities =
+      formData.product_type === "product"
+        ? [
+            {
+              ...(formData.quantities[0] || createEmptyQuantity()),
+              length_inches: "0",
+              stock_quantity: formData.simple_stock,
+            },
+          ]
+        : formData.quantities.filter(
+            (quantity) =>
+              quantity.length_inches.trim() && quantity.stock_quantity.trim(),
+          );
 
     const { data: existingQuantities } = await supabase
       .from("product_quantities")
@@ -519,6 +660,7 @@ export default function AdminProducts({
         const { data, error } = await supabase
           .from("products")
           .insert({
+            product_type: formData.product_type,
             name: formData.name.trim(),
             description: formData.description.trim(),
             price: Number(formData.price),
@@ -531,7 +673,6 @@ export default function AdminProducts({
               : null,
             image_url: null,
             is_trending: formData.is_trending,
-            is_newest: formData.is_newest,
           })
           .select("id")
           .single();
@@ -554,15 +695,21 @@ export default function AdminProducts({
       }
 
       const colorImageUrls = await syncColors(productId);
+      const galleryImageUrls = await syncGalleryImages(productId);
       await syncQuantities(productId);
 
       if (!mainImageUrl && colorImageUrls.length > 0) {
         mainImageUrl = colorImageUrls[0];
       }
 
+      if (!mainImageUrl && galleryImageUrls.length > 0) {
+        mainImageUrl = galleryImageUrls[0];
+      }
+
       const { error: updateError } = await supabase
         .from("products")
         .update({
+          product_type: formData.product_type,
           name: formData.name.trim(),
           description: formData.description.trim(),
           price: Number(formData.price),
@@ -575,7 +722,6 @@ export default function AdminProducts({
             : null,
           image_url: mainImageUrl || null,
           is_trending: formData.is_trending,
-          is_newest: formData.is_newest,
         })
         .eq("id", productId);
 
@@ -671,6 +817,24 @@ export default function AdminProducts({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
+                Product Type
+              </label>
+              <select
+                value={formData.product_type}
+                onChange={(event) =>
+                  updateFormField(
+                    "product_type",
+                    event.target.value as "extension" | "product",
+                  )
+                }
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg"
+              >
+                <option value="extension">Extension</option>
+                <option value="product">Hair Product</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Product Name
               </label>
               <Input
@@ -696,6 +860,25 @@ export default function AdminProducts({
               />
             </div>
           </div>
+
+          {formData.product_type === "product" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Stock Quantity
+              </label>
+              <Input
+                type="number"
+                value={formData.simple_stock}
+                onChange={(event) =>
+                  updateFormField("simple_stock", event.target.value)
+                }
+                placeholder="20"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Hair products use one shared stock value instead of colors and lengths.
+              </p>
+            </div>
+          )}
 
           <div className="border border-amber-200 rounded-lg p-4 bg-amber-50/60">
             <label className="flex items-center gap-2 cursor-pointer mb-4">
@@ -809,19 +992,98 @@ export default function AdminProducts({
               />
               <span className="text-sm text-gray-700">Mark as Trending</span>
             </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.is_newest}
-                onChange={() =>
-                  updateFormField("is_newest", !formData.is_newest)
-                }
-              />
-              <span className="text-sm text-gray-700">Mark as New Arrival</span>
-            </label>
           </div>
 
           <div className="border-t border-gray-200 pt-6">
+            <div className="flex items-center justify-between gap-4 mb-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Additional Product Images
+                </label>
+                <p className="text-xs text-gray-500 mt-1">
+                  Upload multiple photos so customers can switch between them on the product page.
+                </p>
+              </div>
+              <span className="text-xs text-gray-500">
+                {formData.gallery_images.length} added
+              </span>
+            </div>
+            <Input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(event) => {
+                const files = Array.from(event.target.files || []);
+
+                if (files.length === 0) {
+                  return;
+                }
+
+                setFormData((current) => ({
+                  ...current,
+                  gallery_images: [
+                    ...current.gallery_images,
+                    ...files.map((file, index) => ({
+                      id: undefined,
+                      image_url: "",
+                      image_file: file,
+                      image_preview_url: URL.createObjectURL(file),
+                      sort_order: current.gallery_images.length + index,
+                    })),
+                  ],
+                }));
+
+                event.target.value = "";
+              }}
+            />
+
+            {formData.gallery_images.length > 0 && (
+              <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {formData.gallery_images.map((image, index) => (
+                  <div
+                    key={image.id || `${image.image_preview_url}-${index}`}
+                    className="rounded-lg border border-gray-200 overflow-hidden bg-white"
+                  >
+                    <div className="relative aspect-square bg-gray-50">
+                      {image.image_preview_url ? (
+                        <img
+                          src={image.image_preview_url}
+                          alt={`Gallery ${index + 1}`}
+                          className="h-full w-full object-contain"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">
+                          No image
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-3 flex items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-gray-600">
+                        Image {index + 1}
+                      </span>
+                      <button
+                        type="button"
+                        className="text-xs text-red-600 hover:text-red-700"
+                        onClick={() =>
+                          setFormData((current) => ({
+                            ...current,
+                            gallery_images: current.gallery_images.filter(
+                              (_, galleryIndex) => galleryIndex !== index,
+                            ),
+                          }))
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {formData.product_type === "extension" && (
+            <div className="border-t border-gray-200 pt-6">
             <div className="flex justify-between items-center mb-4">
               <div>
                 <h4 className="font-semibold text-gray-900">Colors</h4>
@@ -905,9 +1167,11 @@ export default function AdminProducts({
                 </div>
               ))}
             </div>
-          </div>
+            </div>
+          )}
 
-          <div className="border-t border-gray-200 pt-6">
+          {formData.product_type === "extension" && (
+            <div className="border-t border-gray-200 pt-6">
             <div className="flex justify-between items-center mb-4">
               <div>
                 <h4 className="font-semibold text-gray-900">
@@ -979,7 +1243,8 @@ export default function AdminProducts({
                 </div>
               ))}
             </div>
-          </div>
+            </div>
+          )}
 
           <div className="flex gap-3">
             <Button
@@ -1011,7 +1276,7 @@ export default function AdminProducts({
                 Price
               </th>
               <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                Colors & Stock
+                Inventory
               </th>
               <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                 Status
@@ -1044,6 +1309,9 @@ export default function AdminProducts({
                       <p className="font-medium text-gray-900">
                         {product.name}
                       </p>
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">
+                        {product.product_type === "product" ? "Hair Product" : "Extension"}
+                      </p>
                       <p className="text-sm text-gray-600 line-clamp-1">
                         {product.description}
                       </p>
@@ -1073,14 +1341,14 @@ export default function AdminProducts({
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex gap-2">
+                    <span
+                      className={`text-xs px-2 py-1 rounded ${product.product_type === "product" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-700"}`}
+                    >
+                      {product.product_type === "product" ? "Product" : "Extension"}
+                    </span>
                     {product.is_trending && (
                       <span className="bg-red-100 text-red-700 text-xs px-2 py-1 rounded">
                         Trending
-                      </span>
-                    )}
-                    {product.is_newest && (
-                      <span className="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded">
-                        New
                       </span>
                     )}
                   </div>

@@ -60,22 +60,6 @@ async function insertOrderItems(
       throw itemError
     }
 
-    if (item.quantity_id) {
-      const { data: qty } = await supabase
-        .from('product_quantities')
-        .select('stock_quantity')
-        .eq('id', item.quantity_id)
-        .single()
-
-      if (qty) {
-        await supabase
-          .from('product_quantities')
-          .update({
-            stock_quantity: Math.max(0, qty.stock_quantity - quantityOrdered),
-          })
-          .eq('id', item.quantity_id)
-      }
-    }
   }
 }
 
@@ -106,125 +90,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'Transaction not successful' })
     }
 
-    const supabase = createAdminClient()
-    const checkoutMetadata = (metadata || {}) as CheckoutMetadata
-    const cartItems = Array.isArray(checkoutMetadata.cart_items) ? checkoutMetadata.cart_items : []
-    const totalAmount = Number(checkoutMetadata.total_amount ?? Number(amount || 0) / 100)
-
-    const { data: paymentReferenceOrder, error: paymentReferenceError } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('payment_reference', reference)
-      .maybeSingle()
-
-    const { data: legacyReferenceOrder, error: legacyReferenceError } = paymentReferenceOrder
-      ? { data: null, error: null }
-      : await supabase
-          .from('orders')
-          .select('*')
-          .eq('id', reference)
-          .maybeSingle()
-
-    if (paymentReferenceError || legacyReferenceError) {
-      console.error('Order lookup failed:', paymentReferenceError || legacyReferenceError)
-      return NextResponse.json({ success: false, error: 'Order lookup failed' }, { status: 500 })
-    }
-
-    const existingOrder = paymentReferenceOrder || legacyReferenceOrder
-
-    if (existingOrder?.payment_reference) {
-      return NextResponse.json({ success: true, message: 'Payment already recorded' })
-    }
-
-    if (existingOrder) {
-      const { count: existingItemCount } = await supabase
-        .from('order_items')
-        .select('id', { count: 'exact', head: true })
-        .eq('order_id', existingOrder.id)
-
-      if ((existingItemCount || 0) === 0 && cartItems.length > 0) {
-        await insertOrderItems(supabase, existingOrder.id, cartItems)
-      }
-
-      const { error: updateError } = await supabase
-        .from('orders')
-        .update({
-          payment_reference: reference,
-          status: 'processing',
-          confirmation_status: 'confirmed',
-          completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingOrder.id)
-
-      if (updateError) {
-        console.error('Order update failed:', updateError)
-        return NextResponse.json({ success: false, error: updateError.message }, { status: 500 })
-      }
-
-      return NextResponse.json({ success: true, message: 'Order updated' })
-    }
-
-    if (cartItems.length === 0) {
-      return NextResponse.json({ success: false, error: 'Missing checkout metadata' }, { status: 500 })
-    }
-
-    const guestInfo = checkoutMetadata.guest_info || {}
-    const { data: createdOrder, error: createError } = await supabase
-      .from('orders')
-      .insert({
-        user_id: checkoutMetadata.user_id || null,
-        total_amount: totalAmount,
-        status: 'processing',
-        payment_reference: reference,
-        order_type: checkoutMetadata.delivery_type === 'pickup' ? 'pickup' : 'delivery',
-        confirmation_status: 'confirmed',
-        completed_at: new Date().toISOString(),
-        guest_access_token: checkoutMetadata.guest_token || null,
-        guest_first_name: guestInfo.firstName || null,
-        guest_last_name: guestInfo.lastName || null,
-        guest_email: guestInfo.email || null,
-        guest_phone: guestInfo.phone || null,
-        guest_address: guestInfo.address || null,
-        guest_town: guestInfo.town || null,
-        guest_region: guestInfo.region || null,
-      })
-      .select('*')
-      .single()
-
-    if (createError || !createdOrder) {
-      console.error('Order creation failed:', createError)
-      return NextResponse.json({ success: false, error: createError?.message || 'Order creation failed' }, { status: 500 })
-    }
-
-    try {
-      await insertOrderItems(supabase, createdOrder.id, cartItems)
-    } catch (itemErr: any) {
-      console.error('Order item creation failed:', itemErr)
-      return NextResponse.json({ success: false, error: itemErr?.message || 'Failed to create order items' }, { status: 500 })
-    }
-
-    if (createdOrder.guest_email && !createdOrder.user_id) {
-      try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id, email')
-          .eq('email', createdOrder.guest_email)
-          .maybeSingle()
-
-        if (profile) {
-          await supabase
-            .from('orders')
-            .update({ user_id: profile.id })
-            .eq('id', createdOrder.id)
-        }
-      } catch (claimErr) {
-        console.error('Guest order auto-claim failed:', claimErr)
-      }
-    }
-
-    console.log('Order processed successfully:', reference)
-    return NextResponse.json({ success: true, message: 'Order created' })
+    console.log('Paystack success received; webhook acknowledgement only for reference:', reference)
+    return NextResponse.json({ success: true, message: 'Webhook acknowledged' })
   } catch (err: any) {
     console.error('Webhook error:', err)
     return NextResponse.json({ success: false, error: err.message }, { status: 500 })

@@ -5,14 +5,16 @@ import { Product, getProductPricing, slugifyProductName } from '@/lib/api'
 
 interface ProductCardProps {
   product: Product
+  basePath?: "/extensions" | "/products"
 }
 
-export default function ProductCard({ product }: ProductCardProps) {
+export default function ProductCard({ product, basePath }: ProductCardProps) {
   const { hasPromo, currentPrice, originalPrice } = getProductPricing(product)
+  const productBasePath = basePath || (product.product_type === "product" ? "/products" : "/extensions")
 
   return (
     <Link
-      href={`/extensions/${slugifyProductName(product.name)}`}
+      href={`${productBasePath}/${slugifyProductName(product.name)}`}
       className="group block bg-card rounded-xl overflow-hidden shadow-md hover:shadow-2xl transition-all hover:scale-102 border border-border/30 hover:border-primary/30"
     >
       <div className="relative h-48 md:h-72 bg-muted overflow-hidden">

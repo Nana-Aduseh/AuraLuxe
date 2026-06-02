@@ -5,6 +5,7 @@ export interface Product {
   name: string;
   description: string;
   price: number;
+  product_type?: "extension" | "product";
   promo_enabled?: boolean;
   original_price?: number | null;
   discounted_price?: number | null;
@@ -57,8 +58,13 @@ export function getProductPricing(product?: Product | null) {
   };
 }
 
-export async function getProductBySlug(productSlug: string) {
-  const products = await getProducts();
+export async function getProductBySlug(
+  productSlug: string,
+  productType?: "extension" | "product",
+) {
+  const products = productType
+    ? await getProductsByType(productType)
+    : await getProducts();
   const normalizedSlug = productSlug.toLowerCase();
 
   return products.find(
@@ -72,6 +78,13 @@ export interface ProductColor {
   color_name: string;
   color_hex: string;
   image_url?: string | null;
+}
+
+export interface ProductImage {
+  id: string;
+  product_id: string;
+  image_url: string;
+  sort_order: number;
 }
 
 export interface ProductQuantity {
@@ -129,14 +142,30 @@ export async function getProducts() {
   return data as Product[];
 }
 
+export async function getProductsByType(productType: "extension" | "product") {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("product_type", productType)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error(`Error fetching ${productType} products:`, error);
+    return [];
+  }
+
+  return data as Product[];
+}
+
 // Fetch trending products
 export async function getTrendingProducts() {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("products")
     .select("*")
+    .eq("product_type", "extension")
     .eq("is_trending", true)
-    .eq("is_newest", false)
     .limit(5);
 
   if (error) {
@@ -147,29 +176,11 @@ export async function getTrendingProducts() {
   return data as Product[];
 }
 
-// Fetch newest products
-export async function getNewestProducts() {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("products")
-    .select("*")
-    .eq("is_newest", true)
-    .order("created_at", { ascending: false })
-    .limit(5);
-
-  if (error) {
-    console.error("Error fetching newest products:", error);
-    return [];
-  }
-
-  return data as Product[];
-}
-
 // Fetch product by ID with colors and quantities
 export async function getProductDetails(productId: string) {
   const supabase = createClient();
 
-  const [productRes, colorsRes, quantitiesRes] = await Promise.all([
+  const [productRes, colorsRes, quantitiesRes, imagesRes] = await Promise.all([
     supabase.from("products").select("*").eq("id", productId).single(),
     supabase.from("product_colors").select("*").eq("product_id", productId),
     supabase
@@ -177,6 +188,11 @@ export async function getProductDetails(productId: string) {
       .select("*")
       .eq("product_id", productId)
       .order("length_inches", { ascending: true }),
+    supabase
+      .from("product_images")
+      .select("*")
+      .eq("product_id", productId)
+      .order("sort_order", { ascending: true }),
   ]);
 
   if (productRes.error) {
@@ -188,6 +204,7 @@ export async function getProductDetails(productId: string) {
     product: productRes.data as Product,
     colors: colorsRes.data as ProductColor[],
     quantities: quantitiesRes.data as ProductQuantity[],
+    productImages: (imagesRes.data || []) as ProductImage[],
   };
 }
 
@@ -378,7 +395,8 @@ export async function createOrder(
     }
   }
 
-  // Create order items and reduce inventory
+  // Create order items without reducing inventory yet.
+  // Inventory is now reduced only after Paystack verification finalizes the order.
   const orderItemsPromises = cartItems.map(async (item) => {
     const basePayload = {
       order_id: order?.id,
@@ -408,26 +426,6 @@ export async function createOrder(
       console.error("Error creating order item:", itemError);
     }
 
-    // Reduce stock
-    if (item.quantity_id) {
-      const { data: qty } = await supabase
-        .from("product_quantities")
-        .select("stock_quantity")
-        .eq("id", item.quantity_id)
-        .single();
-
-      if (qty) {
-        await supabase
-          .from("product_quantities")
-          .update({
-            stock_quantity: Math.max(
-              0,
-              qty.stock_quantity - item.quantity_ordered,
-            ),
-          })
-          .eq("id", item.quantity_id);
-      }
-    }
   });
 
   await Promise.all(orderItemsPromises);

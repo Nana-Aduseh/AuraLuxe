@@ -3,9 +3,8 @@
 import { useState, useEffect } from 'react'
 import Carousel from '@/components/carousel'
 import {
-  getProducts,
+  getProductsByType,
   getTrendingProducts,
-  getNewestProducts,
   searchProducts,
   Product,
 } from '@/lib/api'
@@ -18,9 +17,9 @@ import { useRouter } from 'next/navigation'
 
 export default function Home() {
   const router = useRouter()
-  const [allProducts, setAllProducts] = useState<Product[]>([])
+  const [extensionProducts, setExtensionProducts] = useState<Product[]>([])
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>([])
   const [trendingProducts, setTrendingProducts] = useState<Product[]>([])
-  const [newestProducts, setNewestProducts] = useState<Product[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Product[]>([])
   const [userName, setUserName] = useState<string | null>(null)
@@ -68,15 +67,15 @@ export default function Home() {
 
   useEffect(() => {
     const loadProducts = async () => {
-      const [all, trending, newest] = await Promise.all([
-        getProducts(),
+      const [extensions, products, trending] = await Promise.all([
+        getProductsByType('extension'),
+        getProductsByType('product'),
         getTrendingProducts(),
-        getNewestProducts(),
       ])
 
-      setAllProducts(all)
+      setExtensionProducts(extensions)
+      setCatalogProducts(products)
       setTrendingProducts(trending)
-      setNewestProducts(newest)
     }
 
     loadProducts()
@@ -166,23 +165,26 @@ export default function Home() {
         <Carousel
           products={trendingProducts}
           title="Trending Now"
+          basePath="/extensions"
         />
       )}
 
-      {/* Newest Section - Hidden when searching */}
-      {!searchQuery.trim() && newestProducts.length > 0 && (
+      {/* Products Section - Hidden when searching */}
+      {!searchQuery.trim() && catalogProducts.length > 0 && (
         <Carousel
-          products={newestProducts}
-          title="New Arrivals"
+          products={catalogProducts}
+          title="Products"
+          basePath="/products"
         />
       )}
 
       {/* All Products Carousel - Hidden when searching */}
-      {!searchQuery.trim() && allProducts.length > 0 && (
+      {!searchQuery.trim() && extensionProducts.length > 0 && (
         <Carousel
-          products={allProducts}
+          products={extensionProducts}
           title="All Extensions"
           onTitleClick={handleAllExtensionsClick}
+          basePath="/extensions"
         />
       )}
 

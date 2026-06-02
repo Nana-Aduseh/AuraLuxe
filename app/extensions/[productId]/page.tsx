@@ -10,6 +10,7 @@ import {
   Product,
   ProductColor,
   ProductQuantity,
+  ProductImage,
   getProductBySlug,
   getProductDetails,
   getProductPricing,
@@ -31,8 +32,10 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState<Product | null>(null)
   const [colors, setColors] = useState<ProductColor[]>([])
   const [quantities, setQuantities] = useState<ProductQuantity[]>([])
+  const [galleryImages, setGalleryImages] = useState<ProductImage[]>([])
   const [selectedColor, setSelectedColor] = useState('')
   const [selectedQuantity, setSelectedQuantity] = useState('')
+  const [selectedMediaIndex, setSelectedMediaIndex] = useState(0)
   const [quantity, setQuantity] = useState(1)
   const [displayImageUrl, setDisplayImageUrl] = useState('')
   const [loading, setLoading] = useState(true)
@@ -46,7 +49,7 @@ export default function ProductDetailPage() {
   useEffect(() => {
     const loadProduct = async () => {
       setLoading(true)
-      const matchedProduct = await getProductBySlug(productSlug)
+      const matchedProduct = await getProductBySlug(productSlug, 'extension')
 
       if (!matchedProduct) {
         router.push('/extensions')
@@ -63,8 +66,10 @@ export default function ProductDetailPage() {
       setProduct(details.product)
       setColors(details.colors)
       setQuantities(details.quantities)
+      setGalleryImages(details.productImages || [])
       setSelectedColor(details.colors[0]?.id || '')
       setSelectedQuantity(details.quantities[0]?.id || '')
+      setSelectedMediaIndex(0)
       setDisplayImageUrl(details.colors[0]?.image_url || details.product.image_url || '')
       setLoading(false)
     }
@@ -76,8 +81,14 @@ export default function ProductDetailPage() {
 
   useEffect(() => {
     const selectedColorData = colors.find((color) => color.id === selectedColor)
-    setDisplayImageUrl(selectedColorData?.image_url || product?.image_url || '')
-  }, [selectedColor, colors, product?.image_url])
+    const selectedGalleryImage = galleryImages[selectedMediaIndex - 1]
+
+    setDisplayImageUrl(
+      selectedMediaIndex > 0
+        ? selectedGalleryImage?.image_url || product?.image_url || selectedColorData?.image_url || ''
+        : selectedColorData?.image_url || product?.image_url || galleryImages[0]?.image_url || '',
+    )
+  }, [selectedColor, colors, product?.image_url, galleryImages, selectedMediaIndex])
 
   if (loading) {
     return (
@@ -185,7 +196,7 @@ export default function ProductDetailPage() {
                     alt={selectedColorData?.color_name ? `${product.name} - ${selectedColorData.color_name}` : product.name}
                     fill
                     sizes="(max-width: 1024px) 100vw, 50vw"
-                    className="object-cover"
+                    className="object-contain"
                     priority
                   />
                 ) : (
@@ -193,6 +204,41 @@ export default function ProductDetailPage() {
                 )}
               </div>
             </div>
+
+            {galleryImages.length > 0 && (
+              <div className="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <button
+                  type="button"
+                  onClick={() => setSelectedMediaIndex(0)}
+                  className={`min-w-[5.25rem] rounded-2xl border p-2 text-left transition-all ${selectedMediaIndex === 0 ? 'border-amber-600 bg-amber-50 shadow-sm' : 'border-border/30 bg-background hover:border-amber-400/50'}`}
+                >
+                  <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-muted flex items-center justify-center">
+                    <span className="text-xs font-semibold text-foreground/70">Main</span>
+                  </div>
+                </button>
+                {galleryImages.map((image, index) => (
+                  <button
+                    key={image.id}
+                    type="button"
+                    onClick={() => setSelectedMediaIndex(index + 1)}
+                    className={`min-w-[5.25rem] rounded-2xl border p-2 text-left transition-all ${selectedMediaIndex === index + 1 ? 'border-amber-600 bg-amber-50 shadow-sm' : 'border-border/30 bg-background hover:border-amber-400/50'}`}
+                  >
+                    <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-muted">
+                      <Image
+                        src={image.image_url}
+                        alt={`Gallery image ${index + 1}`}
+                        fill
+                        sizes="96px"
+                        className="object-contain"
+                      />
+                    </div>
+                    <p className="mt-2 text-xs font-medium text-foreground line-clamp-1">
+                      Photo {index + 1}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="lg:hidden bg-card rounded-3xl border border-border/30 shadow-sm p-4 sm:p-5">
               <div className="flex items-center justify-between gap-3 mb-4">

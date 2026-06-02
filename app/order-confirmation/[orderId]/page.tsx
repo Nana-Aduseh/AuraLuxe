@@ -4,10 +4,9 @@ import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/currency";
-import { CheckCircle, Printer } from "lucide-react";
+import { Printer } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { createClient } from "@/lib/supabase/client";
 import { persistGuestOrderContext } from "@/lib/guest-orders";
 import WhatsAppButton from "@/components/whatsapp-button";
 
@@ -18,7 +17,7 @@ export default function OrderConfirmationPage() {
   const [orderItems, setOrderItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const supabase = createClient();
+  const [isConfirmingPayment, setIsConfirmingPayment] = useState(true);
 
   const orderId = params.orderId as string;
   const guestToken = searchParams.get("guestToken") || searchParams.get("token");
@@ -46,118 +45,69 @@ export default function OrderConfirmationPage() {
           if (response.ok) {
             const payload = await response.json();
 
-            if (!payload.order || payload.order.confirmation_status !== "confirmed") {
-              await wait(2000);
-              continue;
-            }
-
-            setOrder(payload.order);
-            persistGuestOrderContext({
-              orderId: payload.order.id,
-              token: payload.order.guest_access_token || fallbackToken,
-              email: payload.order.guest_email || null,
-            });
-
-            const itemsData = Array.isArray(payload.items) ? payload.items : [];
-
-            if (itemsData.length > 0) {
-              console.log("Order items data:", itemsData);
-              console.log("Item count:", itemsData.length);
-
-              itemsData.forEach((item, index) => {
-                console.log(`Item ${index}:`, {
-                  id: item.id,
-                  product_id: item.product_id,
-                  color_id: item.color_id,
-                  quantity_id: item.quantity_id,
-                  quantity: item.quantity,
-                  price_at_purchase: item.price_at_purchase,
-                  price: item.price,
-                });
+            if (payload.order && payload.order.confirmation_status === "confirmed") {
+              setIsConfirmingPayment(false);
+              setOrder(payload.order);
+              persistGuestOrderContext({
+                orderId: payload.order.id,
+                token: payload.order.guest_access_token || fallbackToken,
+                email: payload.order.guest_email || null,
               });
 
-              const enrichedItems = await Promise.all(
-                itemsData.map(async (item: any) => {
-                  try {
-                    const { data: productData, error: productError } = await supabase
-                      .from("products")
-                      .select("id, name, price")
-                      .eq("id", item.product_id)
-                      .single();
-
-                    if (productError)
-                      console.error("Error loading product:", productError);
-                    else
-                      console.log(
-                        `Product loaded for item ${item.product_id}:`,
-                        productData,
-                      );
-
-                    let colorData = null;
-                    if (item.color_id) {
-                      const { data: colorRes, error: colorError } = await supabase
-                        .from("product_colors")
-                        .select("color_name")
-                        .eq("id", item.color_id)
-                        .single();
-
-                      if (colorError)
-                        console.warn("Error loading color:", colorError);
-                      else {
-                        colorData = colorRes;
-                        console.log(
-                          `Color loaded for item ${item.color_id}:`,
-                          colorData,
-                        );
-                      }
-                    }
-
-                    let quantityData = null;
-                    if (item.quantity_id) {
-                      const { data: quantityRes, error: quantityError } =
-                        await supabase
-                          .from("product_quantities")
-                          .select("length_inches")
-                          .eq("id", item.quantity_id)
-                          .single();
-
-                      if (quantityError)
-                        console.warn("Error loading quantity:", quantityError);
-                      else {
-                        quantityData = quantityRes;
-                        console.log(
-                          `Quantity loaded for item ${item.quantity_id}:`,
-                          quantityData,
-                        );
-                      }
-                    }
-
-                    return {
-                      ...item,
-                      product: productData,
-                      color: colorData,
-                      quantity_data: quantityData,
-                    };
-                  } catch (err) {
-                    console.error("Error enriching item:", err);
-                    return {
-                      ...item,
-                      product: null,
-                      color: null,
-                      quantity_data: null,
-                    };
-                  }
-                }),
-              );
-
-              console.log("Enriched items:", enrichedItems);
-              setOrderItems(enrichedItems);
-            } else {
-              setOrderItems([]);
+              setOrderItems(Array.isArray(payload.items) ? payload.items : []);
+              setLoading(false);
+              return;
             }
 
-            setLoading(false);
-            return;
+            if (payload.verified && payload.payData) {
+              const payData = payload.payData as any;
+              const metadata = (payData.metadata || {}) as any;
+              const cartItems = Array.isArray(metadata.cart_items) ? metadata.cart_items : [];
+
+              const tempOrder = {
+                id: metadata.checkout_reference || payData.reference,
+                payment_reference: payData.reference,
+                confirmation_status: "not_confirmed",
+                status: "processing",
+                total_amount: Number(metadata.total_amount ?? Number(payData.amount) / 100),
+                guest_access_token: metadata.guest_token || fallbackToken || null,
+                guest_email: metadata.guest_info?.email || null,
+                created_at: payData.created_at || new Date().toISOString(),
+              };
+
+              setOrder(tempOrder);
+
+              setOrderItems(Array.isArray(payload.items) ? payload.items : cartItems);
+              setLoading(false);
+
+              try {
+                const finalizeRes = await fetch("/api/orders/finalize", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ reference: payData.reference, token: fallbackToken }),
+                });
+
+                if (finalizeRes.ok) {
+                  const finalized = await finalizeRes.json();
+                  if (finalized.order) {
+                    setOrder(finalized.order);
+                    setOrderItems(Array.isArray(finalized.items) ? finalized.items : (Array.isArray(payload.items) ? payload.items : cartItems));
+                    persistGuestOrderContext({
+                      orderId: finalized.order.id,
+                      token: finalized.order.guest_access_token || fallbackToken,
+                      email: finalized.order.guest_email || null,
+                    });
+                  }
+                } else {
+                  const err = await finalizeRes.json().catch(() => null);
+                  console.error("Finalize failed:", err);
+                }
+              } catch (e) {
+                console.error("Finalize network error:", e);
+              }
+
+              return;
+            }
           }
 
           if (response.status !== 404) {
@@ -186,8 +136,6 @@ export default function OrderConfirmationPage() {
     };
   }, [orderId, guestToken]);
 
-  // Confirmation emails disabled.
-
   const handlePrint = () => {
     window.print();
   };
@@ -195,8 +143,16 @@ export default function OrderConfirmationPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-white">
-        <div className="flex items-center justify-center py-20">
+        <div className="flex flex-col items-center justify-center gap-4 py-20 px-4 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600"></div>
+          <div>
+            <h1 className="text-lg font-semibold text-gray-900">
+              {isConfirmingPayment ? "Confirming payment" : "Loading order details"}
+            </h1>
+            <p className="mt-1 text-sm text-gray-600">
+              {isConfirmingPayment ? "Please wait while we verify your Paystack payment and load your order." : "Please wait while we load your order information."}
+            </p>
+          </div>
         </div>
       </main>
     );
@@ -207,9 +163,7 @@ export default function OrderConfirmationPage() {
       <main className="min-h-screen bg-white">
         <div className="max-w-2xl mx-auto px-4 py-16">
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
-            <h1 className="text-2xl font-bold text-gray-900 mb-3">
-              Payment not completed
-            </h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-3">Payment not completed</h1>
             <p className="text-gray-700 mb-6">{loadError}</p>
             <div className="flex flex-col sm:flex-row gap-3">
               <Button asChild className="bg-amber-600 hover:bg-amber-700 text-white">
@@ -218,6 +172,16 @@ export default function OrderConfirmationPage() {
               <Button asChild variant="outline">
                 <Link href="/cart">Back to Cart</Link>
               </Button>
+              <a
+                href={`https://wa.me/233542426135?text=${encodeURIComponent(
+                  `I did not receive my Paystack verification code for reference ${orderId}. Please send it via WhatsApp instead.`,
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center px-4 py-2 border rounded text-sm"
+              >
+                Receive code via WhatsApp
+              </a>
             </div>
           </div>
         </div>
@@ -238,7 +202,6 @@ export default function OrderConfirmationPage() {
   return (
     <main className="min-h-screen bg-white">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Actions */}
         <div className="no-print flex flex-col sm:flex-row gap-3 justify-center mb-8">
           <Button
             onClick={handlePrint}
@@ -247,10 +210,7 @@ export default function OrderConfirmationPage() {
             <Printer className="w-4 h-4" />
             Print Receipt
           </Button>
-          <Button
-            asChild
-            className="bg-amber-600 hover:bg-amber-700 text-white py-2 text-sm"
-          >
+          <Button asChild className="bg-amber-600 hover:bg-amber-700 text-white py-2 text-sm">
             <Link href="/">Continue Shopping</Link>
           </Button>
           <Button variant="outline" asChild className="py-2 text-sm">
@@ -258,9 +218,7 @@ export default function OrderConfirmationPage() {
           </Button>
         </div>
 
-        {/* Receipt Container - Optimized for single page printing */}
         <div className="bg-white border-2 border-gray-300 p-6 space-y-4">
-          {/* Header with Logo and Business Name */}
           <div className="text-center border-b-2 border-gray-300 pb-3">
             <div className="flex justify-center mb-2">
               <Image
@@ -272,45 +230,29 @@ export default function OrderConfirmationPage() {
                 style={{ width: 'auto', height: '2.5rem' }}
               />
             </div>
-            <h1 className="text-lg font-bold text-gray-900">
-              AuraLuxe Extensions
-            </h1>
-            <p className="text-xs text-gray-600">
-              Premium Quality Hair Extensions
-            </p>
+            <h1 className="text-lg font-bold text-gray-900">AuraLuxe Extensions</h1>
+            <p className="text-xs text-gray-600">Premium Quality Hair Extensions</p>
           </div>
 
-          {/* Order Header */}
           <div className="grid grid-cols-2 gap-4 text-sm border-b border-gray-300 pb-3">
             <div>
-              <p className="text-gray-600 text-xs font-semibold">
-                ORDER NUMBER
-              </p>
-              <p className="font-bold text-gray-900 text-sm">
-                {order.id.slice(0, 8).toUpperCase()}
-              </p>
+              <p className="text-gray-600 text-xs font-semibold">ORDER NUMBER</p>
+              <p className="font-bold text-gray-900 text-sm">{order.id.slice(0, 8).toUpperCase()}</p>
             </div>
             <div className="text-right">
               <p className="text-gray-600 text-xs font-semibold">DATE</p>
-              <p className="font-bold text-gray-900 text-sm">
-                {new Date(order.created_at).toLocaleDateString()}
-              </p>
+              <p className="font-bold text-gray-900 text-sm">{new Date(order.created_at).toLocaleDateString()}</p>
             </div>
             <div>
               <p className="text-gray-600 text-xs font-semibold">STATUS</p>
-              <p className="font-bold text-green-600 capitalize text-sm">
-                {order.status}
-              </p>
+              <p className="font-bold text-green-600 capitalize text-sm">{order.status}</p>
             </div>
             <div className="text-right">
               <p className="text-gray-600 text-xs font-semibold">TOTAL</p>
-              <p className="font-bold text-amber-600 text-sm">
-                {formatPrice(order.total_amount)}
-              </p>
+              <p className="font-bold text-amber-600 text-sm">{formatPrice(order.total_amount)}</p>
             </div>
           </div>
 
-          {/* Order Items */}
           <div className="text-xs">
             <p className="font-semibold text-gray-900 mb-2">ORDER ITEMS</p>
             <div className="space-y-1">
@@ -322,17 +264,11 @@ export default function OrderConfirmationPage() {
                   >
                     <div className="flex-1 pr-2">
                       <p className="font-medium text-gray-900">
-                        {item.product?.name ||
-                          item.product_id ||
-                          "Unknown Product"}
+                        {item.product?.name || item.product_id || "Unknown Product"}
                       </p>
                       <p className="text-gray-600">
-                        Color:{" "}
-                        {item.color?.color_name ||
-                          (item.color_id ? "Loading..." : "N/A")}{" "}
-                        | Length:{" "}
-                        {item.quantity_data?.length_inches ||
-                          (item.quantity_id ? "Loading..." : "N/A")}
+                        Color: {item.color?.color_name || (item.color_id ? "Loading..." : "N/A")} | Length:{" "}
+                        {item.quantity_data?.length_inches || (item.quantity_id ? "Loading..." : "N/A")}
                         " | Qty: {item.quantity_ordered ?? item.quantity ?? 0}
                       </p>
                       {!item.product && (
@@ -343,10 +279,8 @@ export default function OrderConfirmationPage() {
                     </div>
                     <p className="font-semibold text-gray-900 whitespace-nowrap">
                       {formatPrice(
-                        (item.product?.price ||
-                          item.price_at_purchase ||
-                          item.price ||
-                          0) * (item.quantity_ordered ?? item.quantity ?? 1),
+                        (item.product?.price || item.price_at_purchase || item.price || 0) *
+                          (item.quantity_ordered ?? item.quantity ?? 1),
                       )}
                     </p>
                   </div>
@@ -356,8 +290,7 @@ export default function OrderConfirmationPage() {
                   <p>No items found</p>
                   {orderItems.length === 0 && (
                     <p className="text-xs text-orange-600 mt-1">
-                      Order may have been placed before item tracking was
-                      enabled
+                      Order may have been placed before item tracking was enabled
                     </p>
                   )}
                 </div>
@@ -365,30 +298,32 @@ export default function OrderConfirmationPage() {
             </div>
           </div>
 
-          {/* Totals */}
           <div className="border-t-2 border-gray-300 pt-2 text-sm font-bold flex justify-between">
             <span>TOTAL:</span>
-            <span className="text-amber-600 text-base">
-              {formatPrice(order.total_amount)}
-            </span>
+            <span className="text-amber-600 text-base">{formatPrice(order.total_amount)}</span>
           </div>
 
-          {/* Footer */}
           <div className="text-center text-xs text-gray-600 border-t border-gray-300 pt-2">
             <p>Thank you for your purchase!</p>
             <p>Contact: +233 542 426 135 | Accra, Ghana</p>
           </div>
         </div>
 
-        {/* Next Steps - Only on screen */}
         <div className="no-print mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
           <h3 className="font-semibold text-blue-900 mb-2">What's Next?</h3>
           <ul className="space-y-1 text-blue-800 text-sm">
-            <li>✓ Your order has been confirmed</li>
-            <li>✓ A confirmation email has been sent</li>
-            <li>
-              ✓ Your hair extensions will be processed within 2-3 business days
-            </li>
+            {order.confirmation_status === "confirmed" ? (
+              <>
+                <li>✓ Your order has been confirmed by the admin team</li>
+                <li>✓ A confirmation email has been sent</li>
+              </>
+            ) : (
+              <>
+                <li>✓ Your payment has been verified</li>
+                <li>• Your order is waiting for admin confirmation</li>
+              </>
+            )}
+            <li>✓ Your hair extensions will be processed within 2-3 business days</li>
             <li>✓ You'll receive delivery updates via phone call</li>
           </ul>
         </div>

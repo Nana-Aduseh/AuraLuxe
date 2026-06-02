@@ -11,7 +11,6 @@ as $$
     where id = auth.uid()
       and is_admin = true
   );
-      and confirmation_status = 'confirmed';
 $$;
 
 grant execute on function public.is_admin_user() to authenticated, anon;
@@ -22,9 +21,20 @@ alter table public.product_colors enable row level security;
 alter table public.product_quantities enable row level security;
 
 alter table public.products
+  add column if not exists product_type text not null default 'extension' check (product_type in ('extension', 'product')),
   add column if not exists promo_enabled boolean not null default false,
   add column if not exists original_price numeric,
   add column if not exists discounted_price numeric;
+
+create table if not exists public.product_images (
+  id uuid default gen_random_uuid() primary key,
+  product_id uuid not null references public.products(id) on delete cascade,
+  image_url text not null,
+  sort_order integer not null default 0,
+  created_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+alter table public.product_images enable row level security;
 
 drop policy if exists "Users can view profiles" on public.profiles;
 create policy "Users can view profiles"
@@ -100,6 +110,20 @@ using (true);
 drop policy if exists "Admins can manage product quantities" on public.product_quantities;
 create policy "Admins can manage product quantities"
 on public.product_quantities
+for all
+to authenticated
+using (public.is_admin_user())
+with check (public.is_admin_user());
+
+drop policy if exists "Public can view product images" on public.product_images;
+create policy "Public can view product images"
+on public.product_images
+for select
+using (true);
+
+drop policy if exists "Admins can manage product images" on public.product_images;
+create policy "Admins can manage product images"
+on public.product_images
 for all
 to authenticated
 using (public.is_admin_user())
@@ -662,15 +686,14 @@ begin
         order by o.created_at desc
       )
       from public.orders o
-      where o.confirmation_status = 'confirmed'
-        and (
-          o.user_id = current_user_id
-          or (
-            current_email is not null
-            and lower(btrim(coalesce(o.guest_email, ''))) = lower(btrim(current_email))
-          )
-          or (p_guest_token is not null and o.guest_access_token = p_guest_token)
+      where (
+        o.user_id = current_user_id
+        or (
+          current_email is not null
+          and lower(btrim(coalesce(o.guest_email, ''))) = lower(btrim(current_email))
         )
+        or (p_guest_token is not null and o.guest_access_token = p_guest_token)
+      )
     ),
     '[]'::jsonb
   );

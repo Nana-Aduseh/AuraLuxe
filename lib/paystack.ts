@@ -7,6 +7,11 @@ export interface PaystackInitPayload {
   callback_url?: string
   orderId?: string
   metadata?: Record<string, unknown>
+  firstname?: string
+  lastname?: string
+  phone?: string
+  currency?: string
+  channels?: string[]
 }
 
 async function fetchWithRetry(url: string, init: RequestInit, retries = 1, timeoutMs = 20000) {
@@ -49,6 +54,11 @@ export async function initializePaystackTransaction(payload: PaystackInitPayload
     reference: payload.reference,
     callback_url: payload.callback_url,
     metadata: payload.metadata,
+    firstname: payload.firstname,
+    lastname: payload.lastname,
+    phone: payload.phone,
+    currency: payload.currency || 'GHS',
+    channels: payload.channels || ['card', 'mobile_money'],
   }
 
   const res = await fetchWithRetry('https://api.paystack.co/transaction/initialize', {

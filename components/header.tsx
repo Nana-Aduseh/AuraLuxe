@@ -182,6 +182,12 @@ export default function Header({ onSearch }: HeaderProps) {
             >
               Extensions
             </Link>
+            <Link
+              href="/products"
+              className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm"
+            >
+              Products
+            </Link>
             {user && (
               <Link
                 href="/orders"
@@ -307,6 +313,13 @@ export default function Header({ onSearch }: HeaderProps) {
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Extensions
+              </Link>
+              <Link
+                href="/products"
+                className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm px-4 py-2 rounded hover:bg-muted"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Products
               </Link>
               {user && (
                 <Link

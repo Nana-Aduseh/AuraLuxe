@@ -419,13 +419,22 @@ export default function AdminOrders({ searchQuery = "" }: AdminOrdersProps) {
                           </div>
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
-                              Completed At
+                              {order.confirmation_status === "confirmed"
+                                ? "Completed At"
+                                : "Payment Made At"}
                             </label>
                             <div className="w-full text-sm px-3 py-2 rounded border font-medium text-center bg-gray-100 border-gray-300 text-gray-700">
                               {order.completed_at
                                 ? format(new Date(order.completed_at), "PPpp")
-                                : "Pending payment"}
+                                : order.confirmation_status === "confirmed"
+                                  ? "Completed payment time unavailable"
+                                  : "Waiting for payment time"}
                             </div>
+                            {order.confirmation_status !== "confirmed" && (
+                              <p className="mt-2 text-xs text-amber-700">
+                                Crosscheck this payment time with Paystack, then confirm the order.
+                              </p>
+                            )}
                           </div>
                         </div>
 
