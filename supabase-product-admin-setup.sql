@@ -24,7 +24,8 @@ alter table public.products
   add column if not exists product_type text not null default 'extension' check (product_type in ('extension', 'product')),
   add column if not exists promo_enabled boolean not null default false,
   add column if not exists original_price numeric,
-  add column if not exists discounted_price numeric;
+  add column if not exists discounted_price numeric,
+  add column if not exists is_deleted boolean not null default false;
 
 create table if not exists public.product_images (
   id uuid default gen_random_uuid() primary key,

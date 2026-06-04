@@ -12,6 +12,7 @@ export interface Product {
   image_url: string | null;
   is_trending: boolean;
   is_newest: boolean;
+  is_deleted?: boolean;
   created_at: string;
 }
 
@@ -132,6 +133,7 @@ export async function getProducts() {
   const { data, error } = await supabase
     .from("products")
     .select("*")
+    .eq("is_deleted", false)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -148,6 +150,7 @@ export async function getProductsByType(productType: "extension" | "product") {
     .from("products")
     .select("*")
     .eq("product_type", productType)
+    .eq("is_deleted", false)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -166,6 +169,7 @@ export async function getTrendingProducts() {
     .select("*")
     .eq("product_type", "extension")
     .eq("is_trending", true)
+    .eq("is_deleted", false)
     .limit(5);
 
   if (error) {
@@ -181,7 +185,12 @@ export async function getProductDetails(productId: string) {
   const supabase = createClient();
 
   const [productRes, colorsRes, quantitiesRes, imagesRes] = await Promise.all([
-    supabase.from("products").select("*").eq("id", productId).single(),
+    supabase
+      .from("products")
+      .select("*")
+      .eq("id", productId)
+      .eq("is_deleted", false)
+      .maybeSingle(),
     supabase.from("product_colors").select("*").eq("product_id", productId),
     supabase
       .from("product_quantities")
@@ -200,6 +209,10 @@ export async function getProductDetails(productId: string) {
     return null;
   }
 
+  if (!productRes.data) {
+    return null;
+  }
+
   return {
     product: productRes.data as Product,
     colors: colorsRes.data as ProductColor[],
@@ -214,6 +227,7 @@ export async function searchProducts(query: string) {
   const { data, error } = await supabase
     .from("products")
     .select("*")
+    .eq("is_deleted", false)
     .or(`name.ilike.%${query}%,description.ilike.%${query}%`);
 
   if (error) {

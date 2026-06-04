@@ -138,6 +138,7 @@ export default function AdminProducts({
     const { data, error } = await supabase
       .from("products")
       .select("*")
+      .eq("is_deleted", false)
       .order("created_at", { ascending: false });
 
     if (!error && data) {
@@ -746,7 +747,7 @@ export default function AdminProducts({
 
     const { error } = await supabase
       .from("products")
-      .delete()
+      .update({ is_deleted: true })
       .eq("id", productId);
 
     if (error) {
