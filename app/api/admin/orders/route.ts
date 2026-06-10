@@ -57,7 +57,7 @@ export async function GET() {
             await Promise.all([
               dataClient
                 .from("products")
-                .select("name")
+                .select("name, length_inches")
                 .eq("id", item.product_id)
                 .maybeSingle(),
               item.color_id
@@ -83,7 +83,7 @@ export async function GET() {
             price_at_purchase: item.price_at_purchase ?? item.price ?? 0,
             product_name: product?.name || `Product ID: ${item.product_id}`,
             color_name: color?.color_name || (item.color_id ? "Unknown" : ""),
-            length_inches: quantity?.length_inches ?? null,
+            length_inches: product?.length_inches ?? quantity?.length_inches ?? null,
           };
         }),
       );

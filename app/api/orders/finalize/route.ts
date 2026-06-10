@@ -143,18 +143,18 @@ export async function POST(request: NextRequest) {
 
       if (itemError) console.error('Order item insert error:', itemError)
 
-      if (item.quantity_id) {
-        const { data: qty } = await supabase
-          .from('product_quantities')
+      if (item.color_id) {
+        const { data: colorData } = await supabase
+          .from('product_colors')
           .select('stock_quantity')
-          .eq('id', item.quantity_id)
-          .single()
+          .eq('id', item.color_id)
+          .maybeSingle()
 
-        if (qty) {
+        if (colorData && typeof colorData.stock_quantity === 'number') {
           await supabase
-            .from('product_quantities')
-            .update({ stock_quantity: Math.max(0, qty.stock_quantity - quantityOrdered) })
-            .eq('id', item.quantity_id)
+            .from('product_colors')
+            .update({ stock_quantity: Math.max(0, colorData.stock_quantity - quantityOrdered) })
+            .eq('id', item.color_id)
         }
       }
     }

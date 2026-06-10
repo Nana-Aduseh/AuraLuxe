@@ -925,9 +925,16 @@ export default function CheckoutPage() {
                         )}
                       </div>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {item.color?.color_name} • {item.quantity?.length_inches}
-                      {'"'}
+                    <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap">
+                      {item.color?.color_name && item.color.color_name !== 'Default' && (
+                        <span>{item.color.color_name}</span>
+                      )}
+                      {item.product?.product_type === 'extension' && (
+                        <span>
+                          {item.color?.color_name && item.color.color_name !== 'Default' ? '• ' : ''}
+                          {item.product.length_inches || item.quantity?.length_inches || 'N/A'}"
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}

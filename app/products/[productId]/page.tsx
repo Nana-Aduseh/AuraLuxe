@@ -9,8 +9,6 @@ import { formatPrice } from '@/lib/currency'
 import {
   Product,
   ProductColor,
-  ProductQuantity,
-  ProductImage,
   getProductBySlug,
   getProductDetails,
   getProductPricing,
@@ -31,9 +29,6 @@ export default function HairProductDetailPage() {
 
   const [product, setProduct] = useState<Product | null>(null)
   const [defaultColor, setDefaultColor] = useState<ProductColor | null>(null)
-  const [defaultQuantity, setDefaultQuantity] = useState<ProductQuantity | null>(null)
-  const [galleryImages, setGalleryImages] = useState<ProductImage[]>([])
-  const [selectedMediaIndex, setSelectedMediaIndex] = useState(0)
   const [quantity, setQuantity] = useState(1)
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
@@ -62,9 +57,6 @@ export default function HairProductDetailPage() {
 
       setProduct(details.product)
       setDefaultColor(details.colors[0] || null)
-      setDefaultQuantity(details.quantities[0] || null)
-      setGalleryImages(details.productImages || [])
-      setSelectedMediaIndex(0)
       setLoading(false)
     }
 
@@ -81,25 +73,22 @@ export default function HairProductDetailPage() {
     )
   }
 
-  if (!product || !defaultQuantity || !defaultColor) {
+  if (!product || !defaultColor) {
     return null
   }
 
   const pricing = getProductPricing(product)
-  const selectedGalleryImage = galleryImages[selectedMediaIndex - 1]
-  const activeImageUrl =
-    selectedMediaIndex > 0
-      ? selectedGalleryImage?.image_url || product.image_url || ''
-      : product.image_url || galleryImages[0]?.image_url || ''
+  const activeImageUrl = product.image_url || ''
+  const availableStock = defaultColor?.stock_quantity || 0;
 
   const handleAddToCart = async () => {
     const {
       data: { user },
     } = await supabase.auth.getUser()
 
-    if (quantity > defaultQuantity.stock_quantity) {
+    if (quantity > availableStock) {
       toast.error(
-        `Sorry, only ${defaultQuantity.stock_quantity} ${defaultQuantity.stock_quantity === 1 ? 'piece' : 'pieces'} available.`,
+        `Sorry, only ${availableStock} ${availableStock === 1 ? 'piece' : 'pieces'} available.`,
       )
       return
     }
@@ -111,14 +100,14 @@ export default function HairProductDetailPage() {
           user.id,
           product.id,
           defaultColor.id,
-          defaultQuantity.id,
+          null,
           quantity,
         )
       } else {
         addGuestCartItem(
           product,
           defaultColor,
-          defaultQuantity,
+          null,
           quantity,
         )
       }
@@ -137,9 +126,9 @@ export default function HairProductDetailPage() {
       data: { user },
     } = await supabase.auth.getUser()
 
-    if (quantity > defaultQuantity.stock_quantity) {
+    if (quantity > availableStock) {
       toast.error(
-        `Sorry, only ${defaultQuantity.stock_quantity} ${defaultQuantity.stock_quantity === 1 ? 'piece' : 'pieces'} available.`,
+        `Sorry, only ${availableStock} ${availableStock === 1 ? 'piece' : 'pieces'} available.`,
       )
       return
     }
@@ -147,18 +136,18 @@ export default function HairProductDetailPage() {
     setProcessing(true)
     try {
       const buyNowItem = {
-        id: `buy-now-${product.id}-${defaultColor.id}-${defaultQuantity.id}`,
+        id: `buy-now-${product.id}-${defaultColor.id}-null`,
         user_id: user?.id || '',
         product_id: product.id,
         color_id: defaultColor.id,
-        quantity_id: defaultQuantity.id,
+        quantity_id: null,
         quantity_ordered: quantity,
         product: {
           ...product,
           price: pricing.currentPrice,
         },
         color: defaultColor,
-        quantity: defaultQuantity,
+        quantity: undefined,
       }
 
       if (user) {
@@ -222,8 +211,8 @@ export default function HairProductDetailPage() {
             <div className="mb-6 rounded-2xl border border-border/30 bg-background p-4">
               <p className="text-sm font-semibold text-foreground mb-2">Availability</p>
               <p className="text-sm text-foreground/70">
-                {defaultQuantity.stock_quantity > 0
-                  ? `${defaultQuantity.stock_quantity} pieces in stock`
+                {availableStock > 0
+                  ? `${availableStock} pieces in stock`
                   : 'Out of stock'}
               </p>
             </div>
@@ -241,7 +230,7 @@ export default function HairProductDetailPage() {
                 <input
                   type="number"
                   min="1"
-                  max={Math.max(1, defaultQuantity.stock_quantity)}
+                  max={Math.max(1, availableStock)}
                   value={quantity}
                   onChange={(e) =>
                     setQuantity(
@@ -249,7 +238,7 @@ export default function HairProductDetailPage() {
                         1,
                         Math.min(
                           parseInt(e.target.value) || 1,
-                          Math.max(1, defaultQuantity.stock_quantity),
+                          Math.max(1, availableStock),
                         ),
                       ),
                     )
@@ -260,7 +249,7 @@ export default function HairProductDetailPage() {
                   type="button"
                   onClick={() =>
                     setQuantity(
-                      Math.min(quantity + 1, Math.max(1, defaultQuantity.stock_quantity)),
+                      Math.min(quantity + 1, Math.max(1, availableStock)),
                     )
                   }
                   className="h-11 w-11 rounded-xl border border-border/30 hover:bg-muted text-lg shrink-0"
@@ -270,45 +259,10 @@ export default function HairProductDetailPage() {
               </div>
             </div>
 
-            {galleryImages.length > 0 && (
-              <div className="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <button
-                  type="button"
-                  onClick={() => setSelectedMediaIndex(0)}
-                  className={`min-w-[5.25rem] rounded-2xl border p-2 text-left transition-all ${selectedMediaIndex === 0 ? 'border-amber-600 bg-amber-50 shadow-sm' : 'border-border/30 bg-background hover:border-amber-400/50'}`}
-                >
-                  <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-muted flex items-center justify-center">
-                    <span className="text-xs font-semibold text-foreground/70">Main</span>
-                  </div>
-                </button>
-                {galleryImages.map((image, index) => (
-                  <button
-                    key={image.id}
-                    type="button"
-                    onClick={() => setSelectedMediaIndex(index + 1)}
-                    className={`min-w-[5.25rem] rounded-2xl border p-2 text-left transition-all ${selectedMediaIndex === index + 1 ? 'border-amber-600 bg-amber-50 shadow-sm' : 'border-border/30 bg-background hover:border-amber-400/50'}`}
-                  >
-                    <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-muted">
-                      <Image
-                        src={image.image_url}
-                        alt={`Gallery image ${index + 1}`}
-                        fill
-                        sizes="96px"
-                        className="object-contain"
-                      />
-                    </div>
-                    <p className="mt-2 text-xs font-medium text-foreground line-clamp-1">
-                      Photo {index + 1}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            )}
-
             <div className="flex flex-col sm:flex-row gap-3">
               <Button
                 onClick={handleBuyNow}
-                disabled={processing || defaultQuantity.stock_quantity <= 0}
+                disabled={processing || availableStock <= 0}
                 className="flex-1 bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-xl flex items-center justify-center gap-2"
               >
                 <Bolt className="w-5 h-5" />
@@ -316,7 +270,7 @@ export default function HairProductDetailPage() {
               </Button>
               <Button
                 onClick={handleAddToCart}
-                disabled={processing || defaultQuantity.stock_quantity <= 0}
+                disabled={processing || availableStock <= 0}
                 variant="outline"
                 className="flex-1 py-3 rounded-xl flex items-center justify-center gap-2"
               >

@@ -9,6 +9,8 @@ export interface Product {
   promo_enabled?: boolean;
   original_price?: number | null;
   discounted_price?: number | null;
+  weight_grams?: number | null;
+  length_inches?: number | null;
   image_url: string | null;
   is_trending: boolean;
   is_newest: boolean;
@@ -78,13 +80,7 @@ export interface ProductColor {
   color_name: string;
   color_hex: string;
   image_url?: string | null;
-}
-
-export interface ProductImage {
-  id: string;
-  product_id: string;
-  image_url: string;
-  sort_order: number;
+  stock_quantity?: number;
 }
 
 export interface ProductQuantity {
@@ -180,7 +176,7 @@ export async function getTrendingProducts() {
 export async function getProductDetails(productId: string) {
   const supabase = createClient();
 
-  const [productRes, colorsRes, quantitiesRes, imagesRes] = await Promise.all([
+  const [productRes, colorsRes, quantitiesRes] = await Promise.all([
     supabase.from("products").select("*").eq("id", productId).single(),
     supabase.from("product_colors").select("*").eq("product_id", productId),
     supabase
@@ -188,11 +184,6 @@ export async function getProductDetails(productId: string) {
       .select("*")
       .eq("product_id", productId)
       .order("length_inches", { ascending: true }),
-    supabase
-      .from("product_images")
-      .select("*")
-      .eq("product_id", productId)
-      .order("sort_order", { ascending: true }),
   ]);
 
   if (productRes.error) {
@@ -204,7 +195,6 @@ export async function getProductDetails(productId: string) {
     product: productRes.data as Product,
     colors: colorsRes.data as ProductColor[],
     quantities: quantitiesRes.data as ProductQuantity[],
-    productImages: (imagesRes.data || []) as ProductImage[],
   };
 }
 
@@ -232,8 +222,8 @@ export async function getCart(userId: string) {
     .select(
       `
     *,
-    products(id, name, description, price, promo_enabled, original_price, discounted_price, image_url, is_trending, is_newest, created_at),
-    product_colors(id, product_id, color_name, color_hex, image_url),
+    products(id, name, description, price, promo_enabled, original_price, discounted_price, image_url, is_trending, is_newest, created_at, product_type, weight_grams, length_inches),
+    product_colors(id, product_id, color_name, color_hex, image_url, stock_quantity),
     product_quantities(id, product_id, length_inches, weight_grams, stock_quantity)
   `,
     )
@@ -274,7 +264,7 @@ export async function addToCart(
   userId: string,
   productId: string,
   colorId: string,
-  quantityId: string,
+  quantityId: string | null = null,
   quantity: number,
 ) {
   const supabase = createClient();

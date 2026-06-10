@@ -41,8 +41,8 @@ export default function CartPage() {
         .select(
           `
         *,
-        products(id, name, description, price, image_url, is_trending, is_newest, created_at),
-        product_colors(id, product_id, color_name, color_hex, image_url),
+        products(id, name, description, price, image_url, is_trending, is_newest, created_at, product_type, weight_grams, length_inches),
+        product_colors(id, product_id, color_name, color_hex, image_url, stock_quantity),
         product_quantities(id, product_id, length_inches, weight_grams, stock_quantity)
       `
         )
@@ -231,7 +231,7 @@ export default function CartPage() {
                   const quantity = item.quantity || {}
                   
                   const itemSubtotal = (product.price || 0) * (item.quantity_ordered || 1)
-                  const maxStock = quantity.stock_quantity || 999
+                  const maxStock = color.stock_quantity ?? 999
                   
                   return (
                     <div
@@ -249,7 +249,7 @@ export default function CartPage() {
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">No image</div>
                         )}
-                      </div>
+                      </div> github repo
 
                       {/* Details */}
                       <div className="flex-1 min-w-0">
@@ -259,19 +259,11 @@ export default function CartPage() {
                         <p className="text-sm text-foreground/70 mt-1">
                           Color: <span className="font-medium">{color.color_name || 'N/A'}</span>
                         </p>
-                        {color.color_hex && (
-                          <div className="flex items-center gap-2 mt-1">
-                            <div
-                              className="w-4 h-4 rounded-full border border-foreground/20"
-                              style={{ backgroundColor: color.color_hex }}
-                              title={color.color_name}
-                            />
-                            <span className="text-xs text-foreground/60">{color.color_hex}</span>
-                          </div>
+                        {product.product_type === 'extension' && (
+                          <p className="text-sm text-foreground/70 mt-2">
+                            Length: <span className="font-medium">{product.length_inches || quantity.length_inches || 'N/A'}{'"'}</span> • Weight: <span className="font-medium">{product.weight_grams || quantity.weight_grams || 'N/A'}g</span>
+                          </p>
                         )}
-                        <p className="text-sm text-foreground/70 mt-2">
-                          Length: <span className="font-medium">{quantity.length_inches || 'N/A'}{'"'}</span> • Weight: <span className="font-medium">{quantity.weight_grams || 'N/A'}g</span>
-                        </p>
                         <div className="flex items-center gap-4 mt-3">
                           <p className="text-lg font-semibold text-primary">
                             {formatPrice(product.price || 0)} each

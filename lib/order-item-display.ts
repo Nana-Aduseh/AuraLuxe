@@ -30,7 +30,7 @@ export async function enrichOrderItemsForDisplay(
 
       const [productRes, colorRes, quantityRes] = await Promise.all([
         productId
-          ? supabase.from('products').select('id, name, price').eq('id', productId).maybeSingle()
+          ? supabase.from('products').select('id, name, price, length_inches').eq('id', productId).maybeSingle()
           : Promise.resolve({ data: null, error: null }),
         colorId
           ? supabase.from('product_colors').select('id, color_name').eq('id', colorId).maybeSingle()
@@ -47,7 +47,7 @@ export async function enrichOrderItemsForDisplay(
         quantity_data: quantityRes.data || null,
         product_name: productRes.data?.name || null,
         color_name: colorRes.data?.color_name || null,
-        length_inches: quantityRes.data?.length_inches || null,
+        length_inches: productRes.data?.length_inches || quantityRes.data?.length_inches || null,
       }
     }),
   )

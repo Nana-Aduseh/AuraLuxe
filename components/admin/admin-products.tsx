@@ -15,20 +15,7 @@ interface ProductColorForm {
   image_url: string;
   image_file: File | null;
   image_preview_url: string;
-}
-
-interface ProductQuantityForm {
-  id?: string;
-  length_inches: string;
   stock_quantity: string;
-}
-
-interface ProductGalleryImageForm {
-  id?: string;
-  image_url: string;
-  image_file: File | null;
-  image_preview_url: string;
-  sort_order: number;
 }
 
 interface ProductFormState {
@@ -43,10 +30,10 @@ interface ProductFormState {
   base_image_file: File | null;
   base_image_preview_url: string;
   is_trending: boolean;
+  weight_grams: string;
+  length_inches: string;
   simple_stock: string;
   colors: ProductColorForm[];
-  quantities: ProductQuantityForm[];
-  gallery_images: ProductGalleryImageForm[];
 }
 
 const DEFAULT_COLOR_HEX = "#8b5a3c";
@@ -58,22 +45,7 @@ function createEmptyColor(): ProductColorForm {
     image_url: "",
     image_file: null,
     image_preview_url: "",
-  };
-}
-
-function createEmptyQuantity(): ProductQuantityForm {
-  return {
-    length_inches: "",
-    stock_quantity: "",
-  };
-}
-
-function createEmptyGalleryImage(sortOrder: number): ProductGalleryImageForm {
-  return {
-    image_url: "",
-    image_file: null,
-    image_preview_url: "",
-    sort_order: sortOrder,
+    stock_quantity: "0",
   };
 }
 
@@ -90,10 +62,10 @@ function createEmptyForm(): ProductFormState {
     base_image_file: null,
     base_image_preview_url: "",
     is_trending: false,
-    simple_stock: "",
+    weight_grams: "",
+    length_inches: "",
+    simple_stock: "0",
     colors: [createEmptyColor()],
-    quantities: [createEmptyQuantity()],
-    gallery_images: [],
   };
 }
 
@@ -129,6 +101,7 @@ export default function AdminProducts({
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<ProductFormState>(createEmptyForm());
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     loadProducts();
@@ -144,6 +117,7 @@ export default function AdminProducts({
       setProducts(data as Product[]);
     }
 
+    setRefreshKey((prev) => prev + 1);
     setLoading(false);
   };
 
@@ -154,7 +128,7 @@ export default function AdminProducts({
   };
 
   const updateFormField = (
-    field: keyof Omit<ProductFormState, "colors" | "quantities">,
+    field: keyof Omit<ProductFormState, "colors">,
     value: string | boolean | File | null,
   ) => {
     setFormData((current) => ({
@@ -181,24 +155,6 @@ export default function AdminProducts({
     }));
   };
 
-  const updateQuantity = (
-    index: number,
-    field: keyof ProductQuantityForm,
-    value: string,
-  ) => {
-    setFormData((current) => ({
-      ...current,
-      quantities: current.quantities.map((quantity, quantityIndex) =>
-        quantityIndex === index
-          ? {
-              ...quantity,
-              [field]: value,
-            }
-          : quantity,
-      ),
-    }));
-  };
-
   const addColor = () => {
     setFormData((current) => ({
       ...current,
@@ -213,25 +169,6 @@ export default function AdminProducts({
         current.colors.length === 1
           ? current.colors
           : current.colors.filter((_, colorIndex) => colorIndex !== index),
-    }));
-  };
-
-  const addQuantity = () => {
-    setFormData((current) => ({
-      ...current,
-      quantities: [...current.quantities, createEmptyQuantity()],
-    }));
-  };
-
-  const removeQuantity = (index: number) => {
-    setFormData((current) => ({
-      ...current,
-      quantities:
-        current.quantities.length === 1
-          ? current.quantities
-          : current.quantities.filter(
-              (_, quantityIndex) => quantityIndex !== index,
-            ),
     }));
   };
 
@@ -270,20 +207,9 @@ export default function AdminProducts({
         base_image_file: null,
         base_image_preview_url: details.product.image_url || "",
         is_trending: details.product.is_trending,
-        simple_stock:
-          details.quantities.length > 0
-            ? details.quantities[0].stock_quantity.toString()
-            : "",
-        gallery_images:
-          ((details as { productImages?: ProductImage[] }).productImages || []).map(
-            (image, index) => ({
-              id: image.id,
-              image_url: image.image_url,
-              image_file: null,
-              image_preview_url: image.image_url,
-              sort_order: image.sort_order ?? index,
-            }),
-          ),
+        weight_grams: details.product.weight_grams?.toString() || "",
+        length_inches: details.product.length_inches?.toString() || "",
+        simple_stock: details.colors.length > 0 ? (details.colors[0].stock_quantity || 0).toString() : "0",
         colors:
           details.colors.length > 0
             ? details.colors.map((color) => ({
@@ -293,16 +219,9 @@ export default function AdminProducts({
                 image_url: color.image_url || "",
                 image_file: null,
                 image_preview_url: color.image_url || "",
+                stock_quantity: (color.stock_quantity || 0).toString(),
               }))
             : [createEmptyColor()],
-        quantities:
-          details.quantities.length > 0
-            ? details.quantities.map((quantity) => ({
-                id: quantity.id,
-                length_inches: quantity.length_inches.toString(),
-                stock_quantity: quantity.stock_quantity.toString(),
-              }))
-            : [createEmptyQuantity()],
       });
       setEditingId(product.id);
       setShowForm(true);
@@ -345,9 +264,6 @@ export default function AdminProducts({
     const hasAnyImage =
       Boolean(formData.base_image_file) ||
       Boolean(formData.image_url) ||
-      formData.gallery_images.some(
-        (image) => Boolean(image.image_file) || Boolean(image.image_url),
-      ) ||
       formData.colors.some(
         (color) => Boolean(color.image_file) || Boolean(color.image_url),
       );
@@ -358,32 +274,22 @@ export default function AdminProducts({
     }
 
     if (formData.product_type === "extension") {
-      const validColors = formData.colors.filter((color) =>
-        color.color_name.trim(),
-      );
-
-      if (validColors.length === 0) {
-        alert("Please add at least one color.");
+      if (formData.weight_grams && Number.isNaN(Number(formData.weight_grams))) {
+        alert("Please enter a valid weight in grams.");
         return false;
       }
-
-      const validQuantities = formData.quantities.filter(
-        (quantity) =>
-          quantity.length_inches.trim() && quantity.stock_quantity.trim(),
-      );
-
-      if (validQuantities.length === 0) {
-        alert("Please add at least one inventory row with length and stock.");
+      if (!formData.length_inches.trim() || Number.isNaN(Number(formData.length_inches))) {
+        alert("Please enter a valid length in inches.");
+        return false;
+      }
+      const validColors = formData.colors.filter((color) => color.color_name.trim());
+      if (validColors.length === 0) {
+        alert("Please add at least one color/variant to track stock.");
         return false;
       }
     } else {
       if (!formData.simple_stock.trim() || Number.isNaN(Number(formData.simple_stock))) {
         alert("Please enter a valid stock quantity for this product.");
-        return false;
-      }
-
-      if (Number(formData.simple_stock) < 0) {
-        alert("Stock quantity cannot be negative.");
         return false;
       }
     }
@@ -416,90 +322,16 @@ export default function AdminProducts({
     return data.publicUrl;
   };
 
-  const syncGalleryImages = async (productId: string) => {
-    const validImages = formData.gallery_images.filter(
-      (image) => Boolean(image.image_file) || Boolean(image.image_url),
-    );
-
-    const { data: existingImages } = await supabase
-      .from("product_images")
-      .select("id")
-      .eq("product_id", productId);
-
-    const savedImageIds: string[] = [];
-    const savedImageUrls: string[] = [];
-
-    for (let index = 0; index < validImages.length; index += 1) {
-      const image = validImages[index];
-      const imageUrl = image.image_file
-        ? await uploadImage(productId, "gallery", image.image_file)
-        : image.image_url || null;
-
-      const payload = {
-        product_id: productId,
-        image_url: imageUrl,
-        sort_order: index,
-      };
-
-      if (image.id) {
-        const { error } = await supabase
-          .from("product_images")
-          .update(payload)
-          .eq("id", image.id);
-
-        if (error) {
-          throw new Error(error.message);
-        }
-
-        savedImageIds.push(image.id);
-      } else {
-        const { data, error } = await supabase
-          .from("product_images")
-          .insert(payload)
-          .select("id")
-          .single();
-
-        if (error) {
-          throw new Error(error.message);
-        }
-
-        if (data?.id) {
-          savedImageIds.push(data.id);
-        }
-      }
-
-      if (imageUrl) {
-        savedImageUrls.push(imageUrl);
-      }
-    }
-
-    const idsToDelete = (existingImages ?? [])
-      .map((image) => image.id)
-      .filter((id) => !savedImageIds.includes(id));
-
-    if (idsToDelete.length > 0) {
-      const { error } = await supabase
-        .from("product_images")
-        .delete()
-        .in("id", idsToDelete);
-
-      if (error) {
-        throw new Error(error.message);
-      }
-    }
-
-    return savedImageUrls;
-  };
-
   const syncColors = async (productId: string) => {
     const validColors =
       formData.product_type === "product"
         ? [
             {
               ...(formData.colors[0] || createEmptyColor()),
-              color_name: (formData.colors[0]?.color_name || "Default").trim() || "Default",
-              color_hex: formData.colors[0]?.color_hex || DEFAULT_COLOR_HEX,
-            },
+              color_name: "Default",
+              color_hex: DEFAULT_COLOR_HEX,
+              stock_quantity: formData.simple_stock,
+            } as ProductColorForm,
           ]
         : formData.colors.filter((color) => color.color_name.trim());
     const { data: existingColors } = await supabase
@@ -520,6 +352,7 @@ export default function AdminProducts({
         color_name: color.color_name.trim(),
         color_hex: color.color_hex || DEFAULT_COLOR_HEX,
         image_url: imageUrl,
+        stock_quantity: Number(color.stock_quantity) || 0,
       };
 
       if (color.id) {
@@ -572,80 +405,6 @@ export default function AdminProducts({
     return savedColorImageUrls;
   };
 
-  const syncQuantities = async (productId: string) => {
-    const validQuantities =
-      formData.product_type === "product"
-        ? [
-            {
-              ...(formData.quantities[0] || createEmptyQuantity()),
-              length_inches: "0",
-              stock_quantity: formData.simple_stock,
-            },
-          ]
-        : formData.quantities.filter(
-            (quantity) =>
-              quantity.length_inches.trim() && quantity.stock_quantity.trim(),
-          );
-
-    const { data: existingQuantities } = await supabase
-      .from("product_quantities")
-      .select("id")
-      .eq("product_id", productId);
-
-    const savedQuantityIds: string[] = [];
-
-    for (const quantity of validQuantities) {
-      const payload = {
-        product_id: productId,
-        length_inches: Number(quantity.length_inches),
-        weight_grams: 0,
-        stock_quantity: Number(quantity.stock_quantity),
-      };
-
-      if (quantity.id) {
-        const { error } = await supabase
-          .from("product_quantities")
-          .update(payload)
-          .eq("id", quantity.id);
-
-        if (error) {
-          throw new Error(error.message);
-        }
-
-        savedQuantityIds.push(quantity.id);
-      } else {
-        const { data, error } = await supabase
-          .from("product_quantities")
-          .insert(payload)
-          .select("id")
-          .single();
-
-        if (error) {
-          throw new Error(error.message);
-        }
-
-        if (data?.id) {
-          savedQuantityIds.push(data.id);
-        }
-      }
-    }
-
-    const idsToDelete = (existingQuantities ?? [])
-      .map((quantity) => quantity.id)
-      .filter((id) => !savedQuantityIds.includes(id));
-
-    if (idsToDelete.length > 0) {
-      const { error } = await supabase
-        .from("product_quantities")
-        .delete()
-        .in("id", idsToDelete);
-
-      if (error) {
-        throw new Error(error.message);
-      }
-    }
-  };
-
   const persistProduct = async () => {
     if (!validateForm()) {
       return;
@@ -671,6 +430,8 @@ export default function AdminProducts({
             discounted_price: formData.promo_enabled
               ? Number(formData.discounted_price)
               : null,
+            weight_grams: Number(formData.weight_grams) || 0,
+            length_inches: Number(formData.length_inches) || 0,
             image_url: null,
             is_trending: formData.is_trending,
           })
@@ -695,17 +456,9 @@ export default function AdminProducts({
       }
 
       const colorImageUrls = await syncColors(productId);
-      const galleryImageUrls = await syncGalleryImages(productId);
-      await syncQuantities(productId);
-
       if (!mainImageUrl && colorImageUrls.length > 0) {
         mainImageUrl = colorImageUrls[0];
       }
-
-      if (!mainImageUrl && galleryImageUrls.length > 0) {
-        mainImageUrl = galleryImageUrls[0];
-      }
-
       const { error: updateError } = await supabase
         .from("products")
         .update({
@@ -720,6 +473,8 @@ export default function AdminProducts({
           discounted_price: formData.promo_enabled
             ? Number(formData.discounted_price)
             : null,
+          weight_grams: Number(formData.weight_grams) || 0,
+          length_inches: Number(formData.length_inches) || 0,
           image_url: mainImageUrl || null,
           is_trending: formData.is_trending,
         })
@@ -859,26 +614,53 @@ export default function AdminProducts({
                 step="0.01"
               />
             </div>
+            
+            {formData.product_type === "extension" && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Weight (grams)
+                  </label>
+                  <Input
+                    type="number"
+                    value={formData.weight_grams}
+                    onChange={(event) =>
+                      updateFormField("weight_grams", event.target.value)
+                    }
+                    placeholder="100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Length (inches)
+                  </label>
+                  <Input
+                    type="number"
+                    value={formData.length_inches}
+                    onChange={(event) =>
+                      updateFormField("length_inches", event.target.value)
+                    }
+                    placeholder="18"
+                  />
+                </div>
+              </>
+            )}
+            {formData.product_type === "product" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Stock Quantity
+                </label>
+                <Input
+                  type="number"
+                  value={formData.simple_stock}
+                  onChange={(event) =>
+                    updateFormField("simple_stock", event.target.value)
+                  }
+                  placeholder="20"
+                />
+              </div>
+            )}
           </div>
-
-          {formData.product_type === "product" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Stock Quantity
-              </label>
-              <Input
-                type="number"
-                value={formData.simple_stock}
-                onChange={(event) =>
-                  updateFormField("simple_stock", event.target.value)
-                }
-                placeholder="20"
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                Hair products use one shared stock value instead of colors and lengths.
-              </p>
-            </div>
-          )}
 
           <div className="border border-amber-200 rounded-lg p-4 bg-amber-50/60">
             <label className="flex items-center gap-2 cursor-pointer mb-4">
@@ -994,102 +776,13 @@ export default function AdminProducts({
             </label>
           </div>
 
-          <div className="border-t border-gray-200 pt-6">
-            <div className="flex items-center justify-between gap-4 mb-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Additional Product Images
-                </label>
-                <p className="text-xs text-gray-500 mt-1">
-                  Upload multiple photos so customers can switch between them on the product page.
-                </p>
-              </div>
-              <span className="text-xs text-gray-500">
-                {formData.gallery_images.length} added
-              </span>
-            </div>
-            <Input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(event) => {
-                const files = Array.from(event.target.files || []);
-
-                if (files.length === 0) {
-                  return;
-                }
-
-                setFormData((current) => ({
-                  ...current,
-                  gallery_images: [
-                    ...current.gallery_images,
-                    ...files.map((file, index) => ({
-                      id: undefined,
-                      image_url: "",
-                      image_file: file,
-                      image_preview_url: URL.createObjectURL(file),
-                      sort_order: current.gallery_images.length + index,
-                    })),
-                  ],
-                }));
-
-                event.target.value = "";
-              }}
-            />
-
-            {formData.gallery_images.length > 0 && (
-              <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                {formData.gallery_images.map((image, index) => (
-                  <div
-                    key={image.id || `${image.image_preview_url}-${index}`}
-                    className="rounded-lg border border-gray-200 overflow-hidden bg-white"
-                  >
-                    <div className="relative aspect-square bg-gray-50">
-                      {image.image_preview_url ? (
-                        <img
-                          src={image.image_preview_url}
-                          alt={`Gallery ${index + 1}`}
-                          className="h-full w-full object-contain"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">
-                          No image
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-3 flex items-center justify-between gap-3">
-                      <span className="text-xs font-medium text-gray-600">
-                        Image {index + 1}
-                      </span>
-                      <button
-                        type="button"
-                        className="text-xs text-red-600 hover:text-red-700"
-                        onClick={() =>
-                          setFormData((current) => ({
-                            ...current,
-                            gallery_images: current.gallery_images.filter(
-                              (_, galleryIndex) => galleryIndex !== index,
-                            ),
-                          }))
-                        }
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           {formData.product_type === "extension" && (
             <div className="border-t border-gray-200 pt-6">
             <div className="flex justify-between items-center mb-4">
               <div>
-                <h4 className="font-semibold text-gray-900">Colors</h4>
+                <h4 className="font-semibold text-gray-900">Colors / Variants</h4>
                 <p className="text-sm text-gray-600">
-                  Add each available color and upload the matching image from
-                  your computer.
+                  Add each available color or variant and set its stock quantity. Hair products can just have a "Default" variant.
                 </p>
               </div>
               <Button onClick={addColor} type="button" variant="outline">
@@ -1102,7 +795,7 @@ export default function AdminProducts({
               {formData.colors.map((color, index) => (
                 <div
                   key={color.id || `color-${index}`}
-                  className="grid grid-cols-1 lg:grid-cols-[1.4fr_120px_1.4fr_100px] gap-4 items-start border border-gray-200 rounded-lg p-4"
+                  className="grid grid-cols-1 lg:grid-cols-[1.4fr_100px_1.4fr_100px] gap-4 items-start border border-gray-200 rounded-lg p-4"
                 >
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1118,15 +811,15 @@ export default function AdminProducts({
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Swatch
+                      Stock
                     </label>
                     <Input
-                      type="color"
-                      value={color.color_hex || DEFAULT_COLOR_HEX}
+                      type="number"
+                      value={color.stock_quantity}
                       onChange={(event) =>
-                        updateColor(index, "color_hex", event.target.value)
+                        updateColor(index, "stock_quantity", event.target.value)
                       }
-                      className="h-10 p-1"
+                      placeholder="10"
                     />
                   </div>
                   <div>
@@ -1160,82 +853,6 @@ export default function AdminProducts({
                       variant="outline"
                       onClick={() => removeColor(index)}
                       disabled={formData.colors.length === 1}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            </div>
-          )}
-
-          {formData.product_type === "extension" && (
-            <div className="border-t border-gray-200 pt-6">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h4 className="font-semibold text-gray-900">
-                  Lengths and Stock
-                </h4>
-                <p className="text-sm text-gray-600">
-                  Add each sellable length with its available quantity.
-                </p>
-              </div>
-              <Button onClick={addQuantity} type="button" variant="outline">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Length
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              {formData.quantities.map((quantity, index) => (
-                <div
-                  key={quantity.id || `quantity-${index}`}
-                  className="grid grid-cols-1 md:grid-cols-[1fr_1fr_110px] gap-4 items-end border border-gray-200 rounded-lg p-4"
-                >
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Length (inches)
-                    </label>
-                    <Input
-                      type="number"
-                      value={quantity.length_inches}
-                      onChange={(event) =>
-                        updateQuantity(
-                          index,
-                          "length_inches",
-                          event.target.value,
-                        )
-                      }
-                      placeholder="18"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Stock Quantity
-                    </label>
-                    <Input
-                      type="number"
-                      value={quantity.stock_quantity}
-                      onChange={(event) =>
-                        updateQuantity(
-                          index,
-                          "stock_quantity",
-                          event.target.value,
-                        )
-                      }
-                      placeholder="12"
-                    />
-                    <p className="mt-2 text-xs text-gray-500">
-                      Use <span className="font-medium">0</span> to mark this length as out of stock while keeping it orderable.
-                    </p>
-                  </div>
-                  <div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => removeQuantity(index)}
-                      disabled={formData.quantities.length === 1}
                     >
                       Remove
                     </Button>
@@ -1337,7 +954,7 @@ export default function AdminProducts({
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <ProductStockDisplay productId={product.id} />
+                  <ProductStockDisplay productId={product.id} refreshKey={refreshKey} />
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex gap-2">
@@ -1393,14 +1010,14 @@ export default function AdminProducts({
 }
 
 // Component to display stock for each color
-function ProductStockDisplay({ productId }: { productId: string }) {
+function ProductStockDisplay({ productId, refreshKey }: { productId: string, refreshKey: number }) {
   const supabase = createClient();
   const [colors, setColors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadColorStock();
-  }, [productId]);
+  }, [productId, refreshKey]);
 
   const loadColorStock = async () => {
     const { data, error } = await supabase
@@ -1409,7 +1026,8 @@ function ProductStockDisplay({ productId }: { productId: string }) {
         `
         id,
         color_name,
-        product_quantities(stock_quantity)
+        stock_quantity,
+        image_url
       `,
       )
       .eq("product_id", productId);
@@ -1431,21 +1049,16 @@ function ProductStockDisplay({ productId }: { productId: string }) {
   return (
     <div className="space-y-1 text-sm">
       {colors.map((color) => {
-        const quantities = Array.isArray(color.product_quantities)
-          ? color.product_quantities
-          : [color.product_quantities].filter(Boolean);
-        const totalStock = quantities.reduce(
-          (sum, q: any) => sum + (q?.stock_quantity || 0),
-          0,
-        );
+        const totalStock = color.stock_quantity || 0;
         const lowStock = totalStock < 10;
 
         return (
           <div key={color.id} className="flex items-center gap-2">
-            <div
-              className="w-4 h-4 rounded border border-gray-300"
-              style={{ backgroundColor: "#c0b0a0" }}
-            ></div>
+            {color.image_url ? (
+              <img src={color.image_url} alt={color.color_name} className="w-5 h-5 rounded-full object-cover border border-gray-300 shrink-0" />
+            ) : (
+              <div className="w-5 h-5 rounded-full border border-gray-300 bg-gray-200 shrink-0"></div>
+            )}
             <span className="text-gray-700">{color.color_name}</span>
             <span
               className={`font-semibold ${lowStock && totalStock > 0 ? "text-orange-600" : totalStock === 0 ? "text-red-600" : "text-gray-600"}`}
