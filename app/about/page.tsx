@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Heart, Sparkles, Award } from 'lucide-react'
+import modelsImage from '../image/models1.jpg'
 
 export default function AboutPage() {
   return (
@@ -27,9 +28,12 @@ export default function AboutPage() {
             </div>
             <div className="flex-1">
               <div className="relative h-80 rounded-2xl overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/20">
-                <div className="w-full h-full flex items-center justify-center text-primary/30">
-                  <Sparkles size={120} />
-                </div>
+                <Image
+                  src={modelsImage}
+                  alt="AuraLuxe Models"
+                  fill
+                  className="object-cover object-top"
+                />
               </div>
             </div>
           </div>

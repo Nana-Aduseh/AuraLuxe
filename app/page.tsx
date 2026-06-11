@@ -14,6 +14,9 @@ import Footer from '@/components/footer'
 import { Input } from '@/components/ui/input'
 import WhatsAppButton from '@/components/whatsapp-button'
 import { useRouter } from 'next/navigation'
+import Image, { getImageProps } from 'next/image'
+import modelsImage from './image/models.jpg'
+import modelsWideImage from './image/models-wide.jpg'
 
 export default function Home() {
   const router = useRouter()
@@ -97,21 +100,41 @@ export default function Home() {
     router.push('/extensions')
   }
 
+  // Art Direction: Define different images for different screen sizes
+  const common = { alt: 'AuraLuxe Models', fill: true, priority: true, quality: 75 }
+  const { props: { srcSet: desktop } } = getImageProps({ ...common, src: modelsWideImage })
+  const { props: { srcSet: mobile, ...rest } } = getImageProps({ ...common, src: modelsImage })
+
   return (
     <main className="min-h-screen bg-background">
       {/* Hero Section */}
-      <section className="bg-gradient-to-br from-primary/20 via-background to-accent/20 px-4 sm:px-6 lg:px-8 py-20 md:py-32">
-        <div className="max-w-7xl mx-auto text-center">
+      <section className="relative w-full flex items-center justify-center overflow-hidden px-4 sm:px-6 lg:px-8 py-32 md:py-48 min-h-[70vh] md:min-h-[85vh]">
+        {/* Background Image Container */}
+        <div className="absolute inset-0 z-0">
+          <picture>
+            <source media="(min-width: 1024px)" srcSet={desktop} />
+            <source media="(min-width: 0px)" srcSet={mobile} />
+            <img 
+              {...rest} 
+              className="object-cover object-top w-full h-full" 
+              alt="AuraLuxe Models"
+            />
+          </picture>
+          {/* Gradient overlay to tint the image and ensure text readability */}
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/60 via-background/60 to-accent/60" />
+        </div>
+
+        <div className="relative z-10 max-w-7xl mx-auto text-center w-full">
           {userName ? (
-            <h1 className="text-5xl sm:text-6xl font-bold text-foreground mb-6 text-balance">
+            <h1 className="text-5xl sm:text-7xl font-bold text-[#3c2933] drop-shadow-lg mb-6 text-balance tracking-tight">
               Hello, {userName}! ✨
             </h1>
           ) : (
-            <h1 className="text-5xl sm:text-6xl font-bold text-foreground mb-6 text-balance">
+            <h1 className="text-5xl sm:text-7xl font-bold text-[#3c2933] drop-shadow-lg mb-6 text-balance tracking-tight">
               Luxury Hair Reimagined
             </h1>
           )}
-          <p className="text-xl text-foreground/70 mb-10 text-balance">
+          <p className="text-xl md:text-2xl text-[#3c2933] drop-shadow-md mb-10 text-balance">
             Transform your look with premium, 100% virgin hair extensions
           </p>
           <div className="max-w-md mx-auto">
@@ -120,7 +143,7 @@ export default function Home() {
               placeholder="Search extensions..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full py-3"
+              className="w-full py-6 text-base rounded-full shadow-2xl bg-white/95 text-black placeholder:text-gray-500 border-0 focus-visible:ring-2 focus-visible:ring-primary/50"
             />
           </div>
         </div>
