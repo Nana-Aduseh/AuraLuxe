@@ -7,6 +7,7 @@ import './globals.css'
 import SiteHeader from '@/components/site-header'
 import ScrollToTop from '@/components/scroll-to-top'
 import CountdownTimer from '../components/CountdownTimer'
+import CompanyLogo from './image/aura luxe.png'
 
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] }); // This line was already present, no change needed here.
@@ -14,23 +15,8 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] }); // This line was already 
 export const metadata: Metadata = {
   title: 'AuraLuxe Hair | Premium Hair',
   description: 'Premium hair extensions for all hair types. Shop trending and newest collections.',
-  generator: 'v0.app',
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+    icon: CompanyLogo.src,
   },
 }
 
