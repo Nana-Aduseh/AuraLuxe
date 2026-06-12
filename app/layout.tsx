@@ -6,12 +6,13 @@ import { Suspense } from 'react'
 import './globals.css'
 import SiteHeader from '@/components/site-header'
 import ScrollToTop from '@/components/scroll-to-top'
+import CountdownTimer from '../components/CountdownTimer'
 
 const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const _geistMono = Geist_Mono({ subsets: ["latin"] }); // This line was already present, no change needed here.
 
 export const metadata: Metadata = {
-  title: 'AuraLuxe Extensions | Premium Hair',
+  title: 'AuraLuxe Hair | Premium Hair',
   description: 'Premium hair extensions for all hair types. Shop trending and newest collections.',
   generator: 'v0.app',
   icons: {
@@ -33,6 +34,8 @@ export const metadata: Metadata = {
   },
 }
 
+const salesStartDate = '2026-06-12T08:40:00Z'; // June 12, 2026, 08:40:00 GMT
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -41,6 +44,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="bg-background overflow-x-hidden" suppressHydrationWarning>
       <body className="font-sans antialiased bg-background text-foreground overflow-x-hidden">
+        <CountdownTimer targetDate={salesStartDate} />
         <Suspense fallback={null}>
           <ScrollToTop />
         </Suspense>

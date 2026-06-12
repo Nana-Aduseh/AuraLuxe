@@ -223,14 +223,14 @@ export default function OrderConfirmationPage() {
             <div className="flex justify-center mb-2">
               <Image
                 src="/aura-luxe-logo.png"
-                alt="AuraLuxe Extensions"
+                alt="AuraLuxe Hair"
                 width={100}
                 height={40}
                 className="h-10 w-auto"
                 style={{ width: 'auto', height: '2.5rem' }}
               />
             </div>
-            <h1 className="text-lg font-bold text-gray-900">AuraLuxe Extensions</h1>
+            <h1 className="text-lg font-bold text-gray-900">AuraLuxe Hair</h1>
             <p className="text-xs text-gray-600">Premium Quality Hair Extensions</p>
           </div>
 
@@ -257,18 +257,17 @@ export default function OrderConfirmationPage() {
             <p className="font-semibold text-gray-900 mb-2">ORDER ITEMS</p>
             <div className="space-y-1">
               {orderItems && orderItems.length > 0 ? (
-                orderItems.map((item) => (
+                orderItems.map((item, index) => (
                   <div
-                    key={item.id}
+                    key={item.id || `order-item-${index}`}
                     className="flex justify-between items-start py-1 border-b border-gray-200 last:border-0"
                   >
                     <div className="flex-1 pr-2">
                       <p className="font-medium text-gray-900">
                         {item.product?.name || item.product_id || "Unknown Product"}
                       </p>
-                      <p className="text-gray-600">
-                        Color: {item.color?.color_name || (item.color_id ? "Loading..." : "N/A")} | Length:{" "}
-                        {item.quantity_data?.length_inches || (item.quantity_id ? "Loading..." : "N/A")}
+                      <p className="text-gray-600 text-xs">
+                        Color: {item.color?.color_name || (item.color_id ? "Loading..." : "N/A")} | Length: {item.product?.length_inches || (item.quantity_id ? "Loading..." : "N/A")}
                         " | Qty: {item.quantity_ordered ?? item.quantity ?? 0}
                       </p>
                       {!item.product && (
@@ -323,13 +322,13 @@ export default function OrderConfirmationPage() {
                 <li>• Your order is waiting for admin confirmation</li>
               </>
             )}
-            <li>✓ Your hair extensions will be processed within 2-3 business days</li>
+            <li>✓ Your order will be processed within 1-2 business days</li>
             <li>✓ You'll receive delivery updates via phone call</li>
           </ul>
         </div>
       </div>
 
-      <WhatsAppButton message="Hi AuraLuxe Extensions, I need support for my order." />
+      <WhatsAppButton message="Hi AuraLuxe Hair, I need support for my order." />
     </main>
   );
 }

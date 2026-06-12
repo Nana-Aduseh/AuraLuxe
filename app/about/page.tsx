@@ -15,10 +15,10 @@ export default function AboutPage() {
           <div className="flex flex-col gap-6 md:flex-row md:items-center md:gap-12">
             <div className="flex-1">
               <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6 text-balance">
-                About AuraLuxe Extensions
+                About AuraLuxe Hair
               </h1>
               <p className="text-lg text-foreground/70 mb-8 leading-relaxed">
-                We believe every woman deserves to feel confident and beautiful. AuraLuxe Extensions is dedicated to providing premium quality hair extensions that transform your look and boost your confidence.
+                We believe every woman deserves to feel confident and beautiful. AuraLuxe Hair is dedicated to providing premium quality hair that transform your look and boost your confidence.
               </p>
               <Link href="/extensions">
                 <Button size="lg" className="bg-primary hover:bg-primary/90">
@@ -78,7 +78,7 @@ export default function AboutPage() {
           </h2>
           <div className="space-y-4 text-lg text-foreground/70 leading-relaxed">
             <p>
-              AuraLuxe Extensions was founded with a simple mission: to bring luxury hair extensions to everyone. We noticed a gap in the market for high-quality, authentic hair products at reasonable prices.
+              AuraLuxe Hair was founded with a simple mission: to bring luxury hair extensions to everyone. We noticed a gap in the market for high-quality, authentic hair products at reasonable prices.
             </p>
             <p>
               What started as a passion project has grown into a trusted brand serving thousands of satisfied customers across the region. We&apos;re committed to maintaining the highest standards while keeping our products accessible and affordable.
@@ -126,7 +126,7 @@ export default function AboutPage() {
             Ready to Transform Your Look?
           </h2>
           <p className="text-white/90 text-lg mb-8 max-w-2xl mx-auto">
-            Join thousands of satisfied customers who have discovered the confidence that comes with AuraLuxe Extensions.
+            Join thousands of satisfied customers who have discovered the confidence that comes with AuraLuxe Hair.
           </p>
           <Link href="/extensions">
             <Button size="lg" className="bg-white text-primary hover:bg-white/90">

@@ -15,7 +15,7 @@ export default function Footer() {
           <div className="space-y-3 md:flex-shrink-0 md:w-1/4">
             <Image
               src="/aura-luxe-logo.png"
-              alt="Aura Luxe"
+              alt="AuraLuxe Hair"
               width={800}
               height={320}
               className="h-40 w-auto"
@@ -55,7 +55,7 @@ export default function Footer() {
           </div>
 
           {/* Contact */}
-          <div className="md:w-1/4 hidden sm:block">
+          <div className="md:w-1/4">
             <h4 className="font-semibold text-primary-foreground mb-4 text-sm">Get In Touch</h4>
             <ul className="space-y-2.5">
               <li className="flex items-center gap-2">
@@ -64,22 +64,22 @@ export default function Footer() {
                   0542426135
                 </a>
               </li>
+              <li className="flex items-center gap-2">
+                <span className="text-primary-foreground text-sm font-medium">TikTok:</span>
+                <a
+                  href="https://tiktok.com/@auraluxehair"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary-foreground/80 hover:text-primary-foreground transition-colors text-sm"
+                >
+                  AuraLuxe Hair
+                </a>
+              </li>
               <li className="flex items-start gap-2">
                 <MapPin size={16} className="text-primary-foreground flex-shrink-0 mt-0.5" />
                 <span className="text-primary-foreground/80 text-sm">
                   Accra, Ghana
                 </span>
-              </li>
-              <li className="flex items-center gap-2 hidden">
-                <span className="text-primary-foreground text-sm font-medium">TikTok:</span>
-                <a
-                  href="https://tiktok.com/@auraluxeextensions"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary-foreground/80 hover:text-primary-foreground transition-colors text-sm"
-                >
-                  @Aura Luxe Extensions
-                </a>
               </li>
             </ul>
           </div>
@@ -89,7 +89,7 @@ export default function Footer() {
         <div className="border-t border-primary-foreground/20 pt-6">
           <div className="flex justify-center items-center">
             <p className="text-primary-foreground/60 text-sm">
-              © {currentYear} Aura Luxe Extensions. All rights reserved.
+              © {currentYear} AuraLuxe Hair. All rights reserved.
             </p>
           </div>
         </div>

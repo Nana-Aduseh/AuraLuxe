@@ -211,7 +211,7 @@ export default function Home() {
         />
       )}
 
-      <WhatsAppButton message="Hi AuraLuxe Extensions, I want to place an order." />
+      <WhatsAppButton message="Hi AuraLuxe Hair, I want to place an order." />
 
       <Footer />
     </main>
