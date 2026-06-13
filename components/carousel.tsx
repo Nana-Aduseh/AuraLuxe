@@ -10,12 +10,16 @@ interface CarouselProps {
   products: Product[]
   title: string
   onTitleClick?: () => void
+  showIndicators?: boolean
+  basePath?: "/extensions" | "/products"
 }
 
 export default function Carousel({
   products,
   title,
   onTitleClick,
+  showIndicators = true,
+  basePath,
 }: CarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [autoPlay, setAutoPlay] = useState(true)
@@ -52,6 +56,9 @@ export default function Carousel({
     setCurrentIndex((prev) => (prev + 1) % products.length)
     setAutoPlay(false)
   }
+
+  // Generate a unique prefix for ViewTransition to avoid duplicate names on the same page
+  const sectionPrefix = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
   if (products.length === 0) return null
 
@@ -99,28 +106,38 @@ export default function Carousel({
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-6 lg:gap-8">
           {visibleProducts.map((product, index) => (
-            <div key={`${product.id}-${index}`} className="transition-all hover:scale-105 hover:shadow-lg">
-              <ProductCard product={product} />
+            <div 
+              key={`${product.id}-${index}`} 
+              className="transition-all hover:scale-105 hover:shadow-lg"
+              onClick={() => setAutoPlay(false)}
+            >
+              <ProductCard 
+                product={product} 
+                basePath={basePath} 
+                transitionPrefix={`${sectionPrefix}-${index}`}
+              />
             </div>
           ))}
         </div>
 
         {/* Indicator dots */}
-        <div className="flex justify-center gap-3 mt-10">
-          {products.map((_, index) => (
-            <button
-              key={index}
-              className={`w-2.5 h-2.5 rounded-full transition-all ${
-                index === currentIndex ? 'bg-primary w-8' : 'bg-primary/30 hover:bg-primary/50'
-              }`}
-              onClick={() => {
-                setCurrentIndex(index)
-                setAutoPlay(false)
-              }}
-              aria-label={`Go to slide ${index + 1}`}
-            />
-          ))}
-        </div>
+        {showIndicators && (
+          <div className="flex justify-center gap-3 mt-10">
+            {products.map((_, index) => (
+              <button
+                key={index}
+                className={`w-2.5 h-2.5 rounded-full transition-all ${
+                  index === currentIndex ? 'bg-primary w-8' : 'bg-primary/30 hover:bg-primary/50'
+                }`}
+                onClick={() => {
+                  setCurrentIndex(index)
+                  setAutoPlay(false)
+                }}
+                aria-label={`Go to slide ${index + 1}`}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   )

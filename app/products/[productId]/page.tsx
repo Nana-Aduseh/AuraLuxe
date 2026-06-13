@@ -9,6 +9,7 @@ import { formatPrice } from '@/lib/currency'
 import {
   Product,
   ProductColor,
+  ProductQuantity,
   getProductBySlug,
   getProductDetails,
   getProductPricing,
@@ -16,11 +17,12 @@ import {
 } from '@/lib/api'
 import { createClient } from '@/lib/supabase/client'
 import {
-  addGuestCartItem,
   saveGuestBuyNowItem,
 } from '@/lib/guest-cart'
 import { ArrowLeft, Bolt, ShoppingCart } from 'lucide-react'
 import { toast } from 'sonner'
+import { AddToCartSuccessModal } from '@/components/auth/add-to-cart-modal'
+import { AddToCartRequiresSignInModal } from '@/components/auth/add-to-cart-signin-modal'
 
 export default function HairProductDetailPage() {
   const params = useParams()
@@ -29,9 +31,12 @@ export default function HairProductDetailPage() {
 
   const [product, setProduct] = useState<Product | null>(null)
   const [defaultColor, setDefaultColor] = useState<ProductColor | null>(null)
+  const [selectedQuantityId, setSelectedQuantityId] = useState<string | null>(null)
   const [quantity, setQuantity] = useState(1)
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
+  const [showAddToCartSuccess, setShowAddToCartSuccess] = useState(false)
+  const [showSignInModal, setShowSignInModal] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -57,6 +62,7 @@ export default function HairProductDetailPage() {
 
       setProduct(details.product)
       setDefaultColor(details.colors[0] || null)
+      setSelectedQuantityId(details.quantities[0]?.id || null)
       setLoading(false)
     }
 
@@ -86,6 +92,11 @@ export default function HairProductDetailPage() {
       data: { user },
     } = await supabase.auth.getUser()
 
+    if (!user) {
+      setShowSignInModal(true)
+      return
+    }
+
     if (quantity > availableStock) {
       toast.error(
         `Sorry, only ${availableStock} ${availableStock === 1 ? 'piece' : 'pieces'} available.`,
@@ -95,27 +106,12 @@ export default function HairProductDetailPage() {
 
     setProcessing(true)
     try {
-      if (user) {
-        await addToCart(
-          user.id,
-          product.id,
-          defaultColor.id,
-          null,
-          quantity,
-        )
-      } else {
-        addGuestCartItem(
-          product,
-          defaultColor,
-          null,
-          quantity,
-        )
-      }
-
-      toast.success('Added to cart successfully!')
-    } catch (error) {
-      console.error('Error adding to cart:', error)
-      toast.error('Failed to add to cart. Please try again.')
+      await addToCart(user.id, product.id, defaultColor.id, selectedQuantityId, quantity)
+      setShowAddToCartSuccess(true)
+      setQuantity(1)
+    } catch (error: any) {
+      console.error('Error adding to cart:', error.message || error)
+      toast.error(error.message || 'Failed to add to cart. Please try again.')
     } finally {
       setProcessing(false)
     }
@@ -136,11 +132,11 @@ export default function HairProductDetailPage() {
     setProcessing(true)
     try {
       const buyNowItem = {
-        id: `buy-now-${product.id}-${defaultColor.id}-null`,
+        id: `buy-now-${product.id}-${defaultColor.id}-${selectedQuantityId || 'null'}`,
         user_id: user?.id || '',
         product_id: product.id,
         color_id: defaultColor.id,
-        quantity_id: null,
+        quantity_id: selectedQuantityId,
         quantity_ordered: quantity,
         product: {
           ...product,
@@ -270,7 +266,7 @@ export default function HairProductDetailPage() {
               </Button>
               <Button
                 onClick={handleAddToCart}
-                disabled={processing || availableStock <= 0}
+                disabled={processing || availableStock <= 0 || quantity > availableStock}
                 variant="outline"
                 className="flex-1 py-3 rounded-xl flex items-center justify-center gap-2"
               >
@@ -281,6 +277,19 @@ export default function HairProductDetailPage() {
           </div>
         </div>
       </div>
+
+      <AddToCartSuccessModal
+        isOpen={showAddToCartSuccess}
+        productName={product?.name || ''}
+        productImage={product?.image_url}
+        quantity={quantity}
+        onClose={() => setShowAddToCartSuccess(false)}
+      />
+
+      <AddToCartRequiresSignInModal
+        isOpen={showSignInModal}
+        onClose={() => setShowSignInModal(false)}
+      />
     </main>
   )
 }

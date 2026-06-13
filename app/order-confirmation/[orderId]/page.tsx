@@ -322,8 +322,8 @@ export default function OrderConfirmationPage() {
                 <li>• Your order is waiting for admin confirmation</li>
               </>
             )}
-            <li>✓ Your order will be processed within 1-2 business days</li>
-            <li>✓ You'll receive delivery updates via phone call</li>
+            <li>• Your order will be processed within 1-2 business days</li>
+            <li>• You'll receive delivery updates via phone call</li>
           </ul>
         </div>
       </div>

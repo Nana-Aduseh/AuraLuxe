@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatPrice } from "@/lib/currency";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { getCart, CartItem, getEffectiveProductPrice } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { persistGuestOrderContext } from "@/lib/guest-orders";
 import WhatsAppButton from "@/components/whatsapp-button";
+import { PrePaystackModal } from "@/components/payment/pre-paystack-modal";
 import {
   clearGuestBuyNowItem,
   clearGuestCartItems,
@@ -77,6 +78,7 @@ export default function CheckoutPage() {
   const [showPayment, setShowPayment] = useState(false);
   const [paystackAuthUrl, setPaystackAuthUrl] = useState<string | null>(null);
   const [pendingCheckoutReference, setPendingCheckoutReference] = useState<string | null>(null);
+  const [showPrePaystack, setShowPrePaystack] = useState(false);
   const [deliveryType, setDeliveryType] = useState<"delivery" | "pickup">(
     "delivery",
   );
@@ -356,6 +358,12 @@ export default function CheckoutPage() {
   const handlePayment = async (e?: React.FormEvent) => {
     e?.preventDefault();
 
+    // If we already have a URL, just show the modal and return
+    if (paystackAuthUrl) {
+      setShowPrePaystack(true);
+      return;
+    }
+
     if (processing) {
       return;
     }
@@ -451,15 +459,17 @@ export default function CheckoutPage() {
       }
 
       const paystackData = await paystackRes.json();
-      const authorizationUrl = paystackData.data?.data?.authorization_url;
+      const authorizationUrl = paystackData.data?.authorization_url || paystackData.authorization_url || paystackData.data?.data?.authorization_url || (paystackData.data && typeof paystackData.data === 'string' ? paystackData.data : null);
+      const paystackReference = paystackData.data?.reference || paystackData.reference;
 
       if (!authorizationUrl) {
         throw new Error("No authorization URL from Paystack");
       }
 
-      // Show caution panel before redirecting to Paystack
+      // Show pre-Paystack confirmation modal
       setPaystackAuthUrl(authorizationUrl);
       setPendingCheckoutReference(checkoutReference);
+      setShowPrePaystack(true);
       setProcessing(false);
     } catch (error) {
       console.error("Payment error:", error);
@@ -468,14 +478,6 @@ export default function CheckoutPage() {
       setProcessing(false);
     }
   };
-
-  useEffect(() => {
-    if (!showPayment || paystackAuthUrl || processing) {
-      return;
-    }
-
-    handlePayment().catch(() => null);
-  }, [showPayment, paystackAuthUrl, processing]);
 
   if (loading) {
     return (
@@ -500,13 +502,13 @@ export default function CheckoutPage() {
   return (
     <main className="min-h-screen bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <Link
-          href="/cart"
-          className="inline-flex items-center gap-2 text-amber-600 hover:text-amber-700 mb-8"
+        <button
+          onClick={() => router.back()}
+          className="inline-flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 text-gray-600 hover:text-gray-900 mb-8 transition-colors"
+          title="Go back"
         >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Cart
-        </Link>
+          <ArrowLeft className="w-5 h-5" />
+        </button>
 
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Checkout</h1>
 
@@ -519,6 +521,13 @@ export default function CheckoutPage() {
                 <h2 className="text-xl font-semibold text-gray-900 mb-6">
                   Order Information
                 </h2>
+
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                  <p className="text-sm text-amber-800 font-medium">
+                    Please fill in your details .
+                  </p>
+                </div>
 
                 {!user && (
                   <div className="mb-8 rounded-2xl border border-border/30 bg-card p-4 sm:p-6 shadow-sm">
@@ -823,9 +832,10 @@ export default function CheckoutPage() {
                 <div className="mb-6">
                   <button
                     onClick={() => setShowPayment(false)}
-                    className="text-amber-600 hover:text-amber-700 text-sm"
+                    className="inline-flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-200 text-gray-600 hover:text-gray-900 transition-colors"
+                    title="Back to delivery"
                   >
-                    ← Back to Delivery
+                    <ArrowLeft className="w-5 h-5" />
                   </button>
                 </div>
 
@@ -868,12 +878,8 @@ export default function CheckoutPage() {
 
                   <Button
                     type="button"
-                    disabled={processing || !paystackAuthUrl}
-                    onClick={() => {
-                      if (paystackAuthUrl) {
-                        window.location.href = paystackAuthUrl;
-                      }
-                    }}
+                    disabled={processing}
+                    onClick={(e) => handlePayment(e)}
                     className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-lg"
                   >
                     {processing ? "Preparing Payment..." : "Proceed to Payment"}
@@ -963,6 +969,16 @@ export default function CheckoutPage() {
       </div>
 
       <WhatsAppButton message="Hi AuraLuxe Extensions, I need help with checkout." />
+
+      <PrePaystackModal
+        isOpen={showPrePaystack}
+        onProceed={() => {
+          if (paystackAuthUrl) {
+            window.location.href = paystackAuthUrl;
+          }
+        }}
+        isLoading={processing}
+      />
     </main>
   );
 }

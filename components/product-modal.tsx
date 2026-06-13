@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/currency";
 import { X, ShoppingCart, Bolt } from "lucide-react";
@@ -33,6 +34,7 @@ export default function ProductModal({
   onAddedToCart,
 }: ProductModalProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [selectedColor, setSelectedColor] = useState<string>(
     colors[0]?.id || "",
   );
@@ -78,20 +80,34 @@ export default function ProductModal({
       return;
     }
 
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.user) {
+      const returnTo = encodeURIComponent(pathname);
+      toast.error("Sign in required", {
+        duration: 5000,
+        description: (
+          <div className="mt-2 text-sm text-foreground leading-relaxed">
+            Already have an account?{" "}
+            <Link href={`/auth/login?returnTo=${returnTo}`} className="font-bold underline text-amber-600 hover:text-amber-800 transition-colors">
+              Sign in
+            </Link>
+            {" "}else{" "}
+            <Link href={`/auth/sign-up?returnTo=${returnTo}`} className="font-bold underline text-amber-600 hover:text-amber-800 transition-colors">
+              sign up here
+            </Link>
+            {" "}to access your cart and complete your order.
+          </div>
+        ),
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      if (user) {
-        await addToCart(
-          user.id,
-          product.id,
-          selectedColor,
-          null,
-          quantity,
-        );
-      } else {
-        addGuestCartItem(product, selectedColorData || null, null, quantity);
-      }
+      await addToCart(session.user.id, product.id, selectedColor, null, quantity);
       toast.success("Added to cart successfully! 🛍️");
+      window.dispatchEvent(new Event('aura-luxe-cart-updated'));
       // Don't close the modal - keep it open so user can order different colors
       setQuantity(1); // Reset quantity for next order
     } catch (error) {

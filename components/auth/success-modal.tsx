@@ -22,25 +22,26 @@ export function SuccessModal({ isOpen, name }: SuccessModalProps) {
   useEffect(() => {
     if (!isOpen) return
 
+    setTimeLeft(3)
     const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          router.push('/')
-          return 0
-        }
-        return prev - 1
-      })
+      setTimeLeft((prev) => Math.max(0, prev - 1))
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [isOpen, router])
+  }, [isOpen])
+
+  useEffect(() => {
+    if (isOpen && timeLeft === 0) {
+      router.push('/')
+    }
+  }, [timeLeft, isOpen, router])
 
   return (
     <Dialog open={isOpen}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-center">Welcome to Aura Luxe! ✨</DialogTitle>
-          <DialogDescription className="text-center pt-4">
+          <DialogDescription className="text-center pt-4" asChild>
             <div className="space-y-4">
               <p className="text-base font-semibold text-foreground">
                 Account created successfully, {name}!

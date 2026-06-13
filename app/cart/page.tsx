@@ -10,6 +10,8 @@ import {
   removeFromCart,
   updateCartItemQuantity,
   CartItem,
+  addToCart,
+  getEffectiveProductPrice,
 } from '@/lib/api'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -19,12 +21,14 @@ import {
   removeGuestCartItem,
   updateGuestCartItemQuantity,
 } from '@/lib/guest-cart'
+import { CartAccessModal } from '@/components/auth/cart-access-modal'
 
 export default function CartPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
   const [isGuestCart, setIsGuestCart] = useState(false)
+  const [showAccessModal, setShowAccessModal] = useState(false)
   const supabase = createClient()
   const router = useRouter()
 
@@ -41,12 +45,14 @@ export default function CartPage() {
         .select(
           `
         *,
-        products(id, name, description, price, image_url, is_trending, is_newest, created_at, product_type, weight_grams, length_inches),
+        products(id, name, description, price, promo_enabled, original_price, discounted_price, image_url, is_trending, is_newest, created_at, product_type, weight_grams, length_inches),
         product_colors(id, product_id, color_name, color_hex, image_url, stock_quantity),
         product_quantities(id, product_id, length_inches, weight_grams, stock_quantity)
       `
         )
         .eq('user_id', userId)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
 
       if (error) {
         console.error('Error loading cart:', error)
@@ -94,42 +100,58 @@ export default function CartPage() {
         data: { user },
       } = await supabase.auth.getUser()
 
-      if (!isActive) {
-        return
-      }
-
-      if (!user) {
-        await loadCart(null)
-        setLoading(false)
-        return
-      }
+      if (!isActive) return
 
       setUser(user)
-      await loadCart(user.id)
 
-      if (!isActive) {
-        return
+      if (!user) {
+        // Restrict access by showing the modal but still load guest items
+        setShowAccessModal(true)
+        await loadCart(null)
+      } else {
+        // Sync guest items to account if any exist
+        const guestItems = getGuestCartItems()
+        if (guestItems.length > 0) {
+          try {
+            for (const item of guestItems) {
+              await addToCart(
+                user.id,
+                item.product_id,
+                item.color_id,
+                item.quantity_id || null,
+                item.quantity_ordered
+              )
+            }
+            clearGuestCartItems()
+            window.dispatchEvent(new Event('aura-luxe-cart-updated'))
+        } catch (error: any) {
+          console.error('Error syncing guest cart to account:', error.message || error)
+            // We don't clear guest items if sync fails to prevent data loss
+          }
+        }
+        // Load the actual database cart
+        await loadCart(user.id)
+
+        channel = supabase
+          .channel(`cart-page-${user.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'cart_items',
+              filter: `user_id=eq.${user.id}`,
+            },
+            async () => {
+              // Reload cart when items change
+              await loadCart(user.id)
+            }
+          )
+          .subscribe()
       }
 
+      if (!isActive) return
       setLoading(false)
-
-      // Set up real-time listener for cart changes
-      channel = supabase
-        .channel(`cart-page-${user.id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'cart_items',
-            filter: `user_id=eq.${user.id}`,
-          },
-          async () => {
-            // Reload cart when items change
-            await loadCart(user.id)
-          }
-        )
-        .subscribe()
     }
 
     initializeCart()
@@ -145,11 +167,13 @@ export default function CartPage() {
   const handleRemove = async (cartItemId: string) => {
     if (isGuestCart) {
       setCartItems(removeGuestCartItem(cartItemId) as CartItem[])
+      window.dispatchEvent(new Event('aura-luxe-cart-updated'))
       return
     }
 
     await removeFromCart(cartItemId)
     setCartItems((items) => items.filter((item) => item.id !== cartItemId))
+    window.dispatchEvent(new Event('aura-luxe-cart-updated'))
   }
 
   const handleQuantityChange = async (cartItemId: string, newQuantity: number) => {
@@ -160,6 +184,7 @@ export default function CartPage() {
 
     if (isGuestCart) {
       setCartItems(updateGuestCartItemQuantity(cartItemId, newQuantity) as CartItem[])
+      window.dispatchEvent(new Event('aura-luxe-cart-updated'))
       return
     }
 
@@ -171,11 +196,13 @@ export default function CartPage() {
           : item
       )
     )
+    window.dispatchEvent(new Event('aura-luxe-cart-updated'))
   }
 
   const total = cartItems.reduce((sum, item) => {
-    const product = item.product || {}
-    return sum + ((product.price || 0) * (item.quantity_ordered || 1))
+    return (
+      sum + getEffectiveProductPrice(item.product) * (item.quantity_ordered || 1)
+    );
   }, 0)
 
   const handleSignInToContinue = () => {
@@ -204,7 +231,7 @@ export default function CartPage() {
         <div className="mb-12">
           <Link href="/" className="inline-flex items-center gap-2 text-primary hover:text-primary/80 transition-colors">
             <ArrowLeft className="w-4 h-4" />
-            Continue Shopping
+            Home
           </Link>
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mt-6 text-balance">Shopping Cart</h1>
         </div>
@@ -230,7 +257,8 @@ export default function CartPage() {
                   const color = item.color || {}
                   const quantity = item.quantity || {}
                   
-                  const itemSubtotal = (product.price || 0) * (item.quantity_ordered || 1)
+                  const unitPrice = getEffectiveProductPrice(product)
+                  const itemSubtotal = unitPrice * (item.quantity_ordered || 1)
                   const maxStock = color.stock_quantity ?? 999
                   
                   return (
@@ -249,7 +277,7 @@ export default function CartPage() {
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">No image</div>
                         )}
-                      </div> github repo
+                      </div>
 
                       {/* Details */}
                       <div className="flex-1 min-w-0">
@@ -265,9 +293,16 @@ export default function CartPage() {
                           </p>
                         )}
                         <div className="flex items-center gap-4 mt-3">
-                          <p className="text-lg font-semibold text-primary">
-                            {formatPrice(product.price || 0)} each
-                          </p>
+                          <div>
+                            {product.promo_enabled && (product.discounted_price || 0) < (product.price || 0) && (
+                                <span className="text-xs text-foreground/50 line-through block">
+                                  {formatPrice(product.original_price || product.price || 0)}
+                                </span>
+                            )}
+                            <p className="text-lg font-semibold text-primary">
+                              {formatPrice(unitPrice)} each
+                            </p>
+                          </div>
                           <p className="text-sm text-foreground/60">
                             Subtotal: <span className="font-semibold text-foreground">{formatPrice(itemSubtotal)}</span>
                           </p>
@@ -345,7 +380,7 @@ export default function CartPage() {
                             <span className="text-foreground/60"> ({color.color_name})</span>
                           )}
                           <div className="text-xs text-foreground/60 mt-1">
-                            {item.quantity_ordered} × {formatPrice(product.price || 0)} = <span className="font-semibold">{formatPrice(((product.price || 0) * item.quantity_ordered))}</span>
+                            {item.quantity_ordered} × {formatPrice(getEffectiveProductPrice(product))} = <span className="font-semibold">{formatPrice(getEffectiveProductPrice(product) * item.quantity_ordered)}</span>
                           </div>
                         </div>
                       )
@@ -406,6 +441,11 @@ export default function CartPage() {
           </div>
         )}
       </div>
+
+      <CartAccessModal 
+        isOpen={showAccessModal} 
+        onClose={() => setShowAccessModal(false)} 
+      />
     </main>
   )
 }

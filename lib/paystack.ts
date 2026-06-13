@@ -99,6 +99,30 @@ export async function verifyPaystackTransaction(reference: string) {
   return res.json()
 }
 
+export async function submitPaystackOTP(reference: string, otp: string) {
+  const secret = process.env.PAYSTACK_SECRET_KEY
+  if (!secret) throw new Error('PAYSTACK_SECRET_KEY is not configured')
+
+  const res = await fetchWithRetry(
+    `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}/submit_otp`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${secret}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ otp }),
+    },
+  )
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(text || 'Failed to submit OTP')
+  }
+
+  return res.json()
+}
+
 export function verifyPaystackWebhookSignature(rawBody: string, signature: string): boolean {
   const secret = process.env.PAYSTACK_SECRET_KEY
   if (!secret) throw new Error('PAYSTACK_SECRET_KEY is not configured')

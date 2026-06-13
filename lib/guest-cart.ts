@@ -37,6 +37,9 @@ function writeGuestCartRecord(items: GuestCartItem[]) {
   };
 
   window.localStorage.setItem(GUEST_CART_KEY, JSON.stringify(record));
+  
+  // Dispatch custom event to notify listeners (e.g., header cart count)
+  window.dispatchEvent(new CustomEvent("aura-luxe-guest-cart-changed", { detail: { items } }));
 }
 
 function readGuestCartItems() {

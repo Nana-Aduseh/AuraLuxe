@@ -1,15 +1,40 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, LogOut, Menu, X, ArrowLeft } from "lucide-react";
+import Image from "next/image";
+import { ShoppingCart, LogOut, Menu, X, ArrowLeft, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { getGuestCartItems, clearGuestCartItems } from "@/lib/guest-cart";
 
 interface HeaderProps {
   onSearch?: (query: string) => void;
+}
+
+/**
+ * SmartLink provides immediate visual feedback for header navigation.
+ */
+function SmartLink({ href, children, className, onClick }: any) {
+  return (
+    <Link href={href} className={className} onClick={onClick}>
+      <LinkIndicator>{children}</LinkIndicator>
+    </Link>
+  );
+}
+
+function LinkIndicator({ children }: any) {
+  const { pending } = useLinkStatus();
+  return (
+    <span className="relative inline-flex items-center gap-1">
+      {children}
+      {pending && (
+        <Loader2 className="w-3 h-3 animate-spin text-primary transition-opacity" />
+      )}
+    </span>
+  );
 }
 
 export default function Header({ onSearch }: HeaderProps) {
@@ -25,8 +50,13 @@ export default function Header({ onSearch }: HeaderProps) {
   const supabase = createClient();
   const isHomePage = pathname === "/";
 
+  // Define these at the top level of the effect to be accessible for cleanup
+  let channel: any = null;
+  let storageUnsubscribe: (() => void) | null = null;
+  let isActive = true;
+
   useEffect(() => {
-    const getUser = async () => {
+    const loadUserDataAndCount = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -61,42 +91,52 @@ export default function Header({ onSearch }: HeaderProps) {
         const [{ data }, userIsAdmin] = await Promise.all([
           supabase
             .from("cart_items")
-            .select("id", { count: "exact" })
+            .select("quantity_ordered")
             .eq("user_id", user.id),
           adminAccessPromise,
         ]);
 
-        setCartCount(data?.length || 0);
+        const count = data?.length || 0;
+        setCartCount(count);
         setIsAdmin(userIsAdmin);
       } else {
-        setCartCount(0);
+        // For guests, calculate count from local storage
+        const guestItems = getGuestCartItems();
+        const count = guestItems.length;
+        setCartCount(count);
         setIsAdmin(false);
         setUserProfile(null);
       }
 
+      // Always refresh listener when user state is determined
+      if (isActive) setupCartListener();
       setLoading(false);
     };
 
-    getUser();
+    loadUserDataAndCount();
 
     const {
       data: { subscription: authSubscription },
     } = supabase.auth.onAuthStateChange(() => {
-      getUser();
+      loadUserDataAndCount();
     });
 
-    // Set up real-time listener for cart changes
-    let channel: any = null;
-    let isActive = true;
+    // Listen for manual refresh events from mutations elsewhere in the app
+    const handleManualRefresh = () => loadUserDataAndCount();
+    window.addEventListener("aura-luxe-cart-updated", handleManualRefresh);
+    // For backward compatibility with existing guest cart logic
+    window.addEventListener("aura-luxe-guest-cart-changed", handleManualRefresh);
 
     const setupCartListener = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!isActive) {
-        return;
-      }
+      if (!isActive) return;
+
+      // Clean up previous listeners before starting new ones
+      if (channel) supabase.removeChannel(channel);
+      if (storageUnsubscribe) storageUnsubscribe();
 
       if (user) {
         channel = supabase
@@ -113,23 +153,40 @@ export default function Header({ onSearch }: HeaderProps) {
               // Refetch cart count when changes occur
               const { data } = await supabase
                 .from("cart_items")
-                .select("id", { count: "exact" })
+                .select("quantity_ordered")
                 .eq("user_id", user.id);
 
-              setCartCount(data?.length || 0);
+              const count = data?.length || 0;
+              setCartCount(count);
             },
           )
           .subscribe();
+      } else {
+        // For guest users, listen to custom guest cart change events
+        const handleGuestCartChange = () => {
+          const guestItems = getGuestCartItems();
+          const guestCount = guestItems.length;
+          setCartCount(guestCount);
+        };
+
+        window.addEventListener("aura-luxe-guest-cart-changed", handleGuestCartChange as EventListener);
+
+        storageUnsubscribe = () => {
+          window.removeEventListener("aura-luxe-guest-cart-changed", handleGuestCartChange as EventListener);
+        };
       }
     };
-
-    setupCartListener();
 
     return () => {
       isActive = false;
       authSubscription.unsubscribe();
+      window.removeEventListener("aura-luxe-cart-updated", handleManualRefresh);
+      window.removeEventListener("aura-luxe-guest-cart-changed", handleManualRefresh);
       if (channel) {
         supabase.removeChannel(channel);
+      }
+      if (storageUnsubscribe) {
+        storageUnsubscribe();
       }
     };
   }, []);
@@ -158,10 +215,13 @@ export default function Header({ onSearch }: HeaderProps) {
         <div className="flex justify-between items-center h-24">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 flex-shrink-0">
-            <img
+            <Image
               src="/aura-luxe-logo.png"
               alt="AuraLuxe Hair"
-              className="h-16 w-auto"
+              width={150}
+              height={64}
+              className="h-16 w-auto object-contain"
+              priority
             />
             <span className="font-semibold text-foreground text-xs sm:text-sm md:text-base">
               AuraLuxe Hair
@@ -170,38 +230,38 @@ export default function Header({ onSearch }: HeaderProps) {
 
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex gap-8 items-center">
-            <Link
+            <SmartLink
               href="/"
               className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm"
             >
               Home
-            </Link>
-            <Link
+            </SmartLink>
+            <SmartLink
               href="/extensions"
               className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm"
             >
               Extensions
-            </Link>
-            <Link
+            </SmartLink>
+            <SmartLink
               href="/products"
               className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm"
             >
               Products
-            </Link>
+            </SmartLink>
             {user && (
-              <Link
+              <SmartLink
                 href="/orders"
                 className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm"
               >
                 Orders
-              </Link>
+              </SmartLink>
             )}
-            <Link
+            <SmartLink
               href="/about"
               className="text-foreground/80 hover:text-primary transition-colors font-medium text-sm"
             >
               About
-            </Link>
+            </SmartLink>
           </nav>
 
           {/* Right Section */}
@@ -224,7 +284,7 @@ export default function Header({ onSearch }: HeaderProps) {
                 <ShoppingCart className="w-5 h-5" />
                 {cartCount > 0 && (
                   <span className="absolute -top-2 -right-2 bg-primary text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
-                    {Math.min(cartCount, 9)}+
+                    {cartCount}
                   </span>
                 )}
               </Button>

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import Carousel from '@/components/carousel'
+import { useState, useEffect, Suspense } from 'react'
+import dynamic from 'next/dynamic'
 import {
   getProductsByType,
   getTrendingProducts,
@@ -10,13 +10,40 @@ import {
 } from '@/lib/api'
 import { createClient } from '@/lib/supabase/client'
 import ProductCard from '@/components/product-card'
-import Footer from '@/components/footer'
 import { Input } from '@/components/ui/input'
-import WhatsAppButton from '@/components/whatsapp-button'
 import { useRouter } from 'next/navigation'
 import Image, { getImageProps } from 'next/image'
+import { Skeleton } from '@/components/ui/skeleton'
 import modelsImage from './image/models.jpg'
 import modelsWideImage from './image/models-wide.jpg'
+
+// Reusable Skeleton for Carousels to improve perceived performance
+const CarouselSkeleton = () => (
+  <div className="py-16 px-4 sm:px-6 lg:px-8 border-y border-border/20">
+    <div className="max-w-7xl mx-auto">
+      <div className="flex items-center justify-between mb-10">
+        <Skeleton className="h-10 w-48" />
+        <div className="flex gap-2">
+          <Skeleton className="h-10 w-10" />
+          <Skeleton className="h-10 w-10" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
+        <Skeleton className="h-72 w-full rounded-xl" />
+        <Skeleton className="h-72 w-full rounded-xl" />
+        <Skeleton className="h-72 w-full hidden sm:block rounded-xl" />
+      </div>
+    </div>
+  </div>
+)
+
+// Dynamically import heavy components to improve INP (Interaction to Next Paint)
+const Carousel = dynamic(() => import('@/components/carousel'), { 
+  ssr: false,
+  loading: () => <CarouselSkeleton />
+})
+const Footer = dynamic(() => import('@/components/footer'), { ssr: false })
+const WhatsAppButton = dynamic(() => import('@/components/whatsapp-button'), { ssr: false })
 
 export default function Home() {
   const router = useRouter()
@@ -70,7 +97,7 @@ export default function Home() {
 
   useEffect(() => {
     const loadProducts = async () => {
-      const [extensions, products, trending] = await Promise.all([
+      const [extensions, products, trendingBase] = await Promise.all([
         getProductsByType('extension'),
         getProductsByType('product'),
         getTrendingProducts(),
@@ -78,22 +105,23 @@ export default function Home() {
 
       setExtensionProducts(extensions)
       setCatalogProducts(products)
-      setTrendingProducts(trending)
+      setTrendingProducts(trendingBase)
     }
 
     loadProducts()
   }, [])
 
   useEffect(() => {
-    if (searchQuery.trim()) {
-      const search = async () => {
-        const results = await searchProducts(searchQuery)
-        setSearchResults(results)
+    // Debounce search to improve INP (Interaction to Next Paint)
+    const timer = setTimeout(() => {
+      if (searchQuery.trim()) {
+        searchProducts(searchQuery).then(setSearchResults)
+      } else {
+        setSearchResults([])
       }
-      search()
-    } else {
-      setSearchResults([])
-    }
+    }, 300)
+
+    return () => clearTimeout(timer)
   }, [searchQuery])
 
   const handleAllExtensionsClick = () => {
@@ -117,6 +145,7 @@ export default function Home() {
             <img 
               {...rest} 
               className="object-cover object-top w-full h-full" 
+              fetchPriority="high"
               alt="AuraLuxe Models"
             />
           </picture>
@@ -166,9 +195,9 @@ export default function Home() {
 
             {searchResults.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                {searchResults.map((product) => (
+                {searchResults.map((product, index) => (
                   <div key={product.id}>
-                    <ProductCard product={product} />
+                    <ProductCard product={product} transitionPrefix={`search-result-${index}`} />
                   </div>
                 ))}
               </div>
@@ -185,30 +214,37 @@ export default function Home() {
 
       {/* Trending Section - Hidden when searching */}
       {!searchQuery.trim() && trendingProducts.length > 0 && (
-        <Carousel
-          products={trendingProducts}
-          title="Trending Now"
-          basePath="/extensions"
-        />
+        // min-h-80 prevents layout shift (CLS) while the carousel is initializing
+        <div id="trending-carousel-container" className="relative min-h-[400px]">
+          <Carousel
+            products={trendingProducts}
+            title="Trending Now"
+            basePath="/extensions"
+          />
+        </div>
       )}
 
       {/* Products Section - Hidden when searching */}
       {!searchQuery.trim() && catalogProducts.length > 0 && (
-        <Carousel
-          products={catalogProducts}
-          title="Products"
-          basePath="/products"
-        />
+        <div className="min-h-[400px]">
+          <Carousel
+            products={catalogProducts}
+            title="Products"
+            basePath="/products"
+          />
+        </div>
       )}
 
       {/* All Products Carousel - Hidden when searching */}
       {!searchQuery.trim() && extensionProducts.length > 0 && (
-        <Carousel
-          products={extensionProducts}
-          title="All Extensions"
-          onTitleClick={handleAllExtensionsClick}
-          basePath="/extensions"
-        />
+        <div className="min-h-[400px]">
+          <Carousel
+            products={extensionProducts}
+            title="All Extensions"
+            onTitleClick={handleAllExtensionsClick}
+            basePath="/extensions"
+          />
+        </div>
       )}
 
       <WhatsAppButton message="Hi AuraLuxe Hair, I want to place an order." />

@@ -227,7 +227,9 @@ export async function getCart(userId: string) {
     product_quantities(id, product_id, length_inches, weight_grams, stock_quantity)
   `,
     )
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
 
   if (error) {
     console.error("Error fetching cart:", error);
@@ -270,31 +272,41 @@ export async function addToCart(
   const supabase = createClient();
 
   // Check if item already in cart
-  const { data: existingItem } = await supabase
+  let query = supabase
     .from("cart_items")
     .select("*")
     .eq("user_id", userId)
     .eq("product_id", productId)
-    .eq("color_id", colorId)
-    .eq("quantity_id", quantityId)
-    .single();
+    .eq("color_id", colorId);
+
+  if (quantityId) {
+    query = query.eq("quantity_id", quantityId);
+  } else {
+    query = query.is("quantity_id", null);
+  }
+
+  const { data: existingItem, error: fetchError } = await query.maybeSingle();
+  if (fetchError) throw fetchError;
 
   if (existingItem) {
     // Update quantity
-    return await supabase
+    const { error: updateError } = await supabase
       .from("cart_items")
       .update({ quantity_ordered: existingItem.quantity_ordered + quantity })
       .eq("id", existingItem.id);
+    if (updateError) throw updateError;
+    return;
   }
 
   // Add new item
-  return await supabase.from("cart_items").insert({
+  const { error: insertError } = await supabase.from("cart_items").insert({
     user_id: userId,
     product_id: productId,
     color_id: colorId,
     quantity_id: quantityId,
     quantity_ordered: quantity,
   });
+  if (insertError) throw insertError;
 }
 
 // Remove from cart
