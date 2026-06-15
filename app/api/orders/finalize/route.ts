@@ -95,20 +95,29 @@ export async function POST(request: NextRequest) {
     });
     
     let metadata = (payData?.metadata || {}) as any
+    if (typeof metadata === 'string') {
+      try { metadata = JSON.parse(metadata); } catch(e) {}
+    }
+
     let cartItems = Array.isArray(metadata.cart_items) ? metadata.cart_items : []
     let totalAmount = Number(metadata.total_amount ?? Number(payData?.amount || 0) / 100)
     let guestInfo = metadata.guest_info || {}
     let deliveryType = metadata.delivery_type || 'delivery'
 
+    // Safely recover dropped metadata from Paystack using the frontend's fallback
+    if (cartItems.length === 0 && forceFallback && fallbackItems && fallbackItems.length > 0) {
+      console.log('[Finalize] Paystack metadata empty, using force fallback items');
+      cartItems = fallbackItems;
+      totalAmount = fallbackTotal || totalAmount;
+      guestInfo = Object.keys(guestInfo).length > 0 ? guestInfo : (fallbackGuestInfo || {});
+      deliveryType = deliveryType || fallbackDeliveryType || 'delivery';
+    }
+
     if (!payData || payData.status !== 'success') {
       console.error('[Finalize] ❌ Payment not successful or verify failed', { paystackStatus: payData?.status });
       
-      if (forceFallback && fallbackItems && fallbackItems.length > 0) {
+      if (forceFallback && cartItems.length > 0) {
         console.log('[Finalize] Using force fallback data to save order anyway!');
-        cartItems = fallbackItems;
-        totalAmount = fallbackTotal || 0;
-        guestInfo = fallbackGuestInfo || {};
-        deliveryType = fallbackDeliveryType || 'delivery';
       } else {
         return NextResponse.json({ error: 'Transaction not successful' }, { status: 400 })
       }
@@ -147,7 +156,11 @@ export async function POST(request: NextRequest) {
 
     if (createError || !createdOrder) {
       console.error('Order creation failed:', createError)
-      return NextResponse.json({ error: 'Failed to create order' }, { status: 500 })
+      return NextResponse.json({ 
+        error: 'Failed to create order', 
+        message: createError?.message,
+        hint: 'If you see an RLS violation, you MUST add SUPABASE_SERVICE_ROLE_KEY to your Vercel Environment Variables.'
+      }, { status: 500 })
     }
 
     // Create separate order items attached to the master order

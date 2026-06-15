@@ -42,7 +42,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'Event ignored' })
     }
 
-    const { reference, amount, status, metadata } = data
+    const { reference, amount, status, metadata: rawMetadata } = data
+    
+    // Parse metadata safely in case Paystack stringifies it
+    let metadata = rawMetadata || {};
+    if (typeof metadata === 'string') {
+      try { metadata = JSON.parse(metadata); } catch(e) {}
+    }
     
     // Use custom checkout_reference from metadata if available (sent from client)
     // Otherwise fallback to Paystack's reference
