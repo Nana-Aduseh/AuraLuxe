@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
         status: 'processing',
         payment_reference: paymentReference,
         order_type: metadata?.delivery_type === 'pickup' ? 'pickup' : 'delivery',
-        confirmation_status: 'not_confirmed',
+        confirmation_status: 'confirmed',
         completed_at: new Date().toISOString(),
         guest_access_token: metadata?.guest_token || null,
         guest_first_name: guestInfo.firstName || null,
