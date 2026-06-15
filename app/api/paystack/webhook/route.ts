@@ -7,11 +7,13 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.text()
     const signature = request.headers.get('x-paystack-signature')
 
-    console.log('[Webhook] Received webhook request');
+    console.log('[Webhook] ============= WEBHOOK RECEIVED =============');
+    console.log('[Webhook] Timestamp:', new Date().toISOString());
     console.log('[Webhook] Signature present:', !!signature);
 
     if (!signature) {
-      console.error('[Webhook] Missing signature header');
+      console.error('[Webhook] ❌ FAILED: Missing signature header');
+      console.error('[Webhook] Expected header: x-paystack-signature');
       return NextResponse.json({ error: 'Missing signature' }, { status: 401 })
     }
 
@@ -20,9 +22,9 @@ export async function POST(request: NextRequest) {
     console.log('[Webhook] Signature valid:', isValid);
     
     if (!isValid) {
-      console.error('[Webhook] Signature verification failed');
-      console.error('[Webhook] Raw body:', rawBody.substring(0, 200));
-      console.error('[Webhook] Signature:', signature);
+      console.error('[Webhook] ❌ FAILED: Signature verification failed');
+      console.error('[Webhook] This usually means PAYSTACK_SECRET_KEY is wrong or changed');
+      console.error('[Webhook] Expected key format: sk_live_xxx or sk_test_xxx');
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
     }
 
@@ -31,10 +33,12 @@ export async function POST(request: NextRequest) {
 
     console.log('[Webhook] Event type:', eventType);
     console.log('[Webhook] Reference:', data?.reference);
+    console.log('[Webhook] Status:', data?.status);
+    console.log('[Webhook] Amount:', data?.amount, 'kobo');
 
     // Only handle successful transactions
     if (eventType !== 'charge.success') {
-      console.log('[Webhook] Ignoring event type:', eventType);
+      console.log('[Webhook] ⏭️  Ignoring event type (not charge.success):', eventType);
       return NextResponse.json({ success: true, message: 'Event ignored' })
     }
 
@@ -109,11 +113,11 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (createError || !createdOrder) {
-      console.error('Webhook: Order creation failed:', createError)
+      console.error('[Webhook] ❌ Order creation failed:', createError)
       return NextResponse.json({ success: false, error: 'Failed to create order' }, { status: 500 })
     }
 
-    console.log('[Webhook] Order created:', { orderId: createdOrder.id, itemCount: cartItems.length });
+    console.log('[Webhook] ✅ Order created successfully:', { orderId: createdOrder.id, itemCount: cartItems.length });
 
     // Add all cart items as order_items for this single order
     for (const item of cartItems) {
@@ -153,13 +157,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log('[Webhook] Successfully processed order:', paymentReference)
+    console.log('[Webhook] ✅ Successfully processed order:', paymentReference)
+    console.log('[Webhook] ==============================================');
     return NextResponse.json({ success: true, message: 'Order processed successfully' })
   } catch (err: any) {
-    console.error('[Webhook] Fatal error:', {
+    console.error('[Webhook] ❌ Fatal error:', {
       error: err.message,
       stack: err.stack,
     });
+    console.error('[Webhook] ==============================================');
     return NextResponse.json({ success: false, error: err.message }, { status: 500 })
   }
 }

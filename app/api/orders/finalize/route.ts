@@ -8,6 +8,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}))
     const { reference, token } = body
 
+    console.log('[Finalize] Starting order finalization:', { reference, hasToken: !!token });
+
     if (!reference) {
       return NextResponse.json({ error: 'Missing reference' }, { status: 400 })
     }
@@ -32,6 +34,7 @@ export async function POST(request: NextRequest) {
     const existingOrder = existingOrders?.[0]
 
     if (existingOrder) {
+      console.log('[Finalize] ✅ Order already exists:', { orderId: existingOrder.id, confirmationStatus: existingOrder.confirmation_status });
       // Order already exists, return it idempotently
       if (existingOrder.confirmation_status === 'confirmed') {
         const { data: items } = await supabase.from('order_items').select('*').eq('order_id', existingOrder.id)
@@ -62,13 +65,14 @@ export async function POST(request: NextRequest) {
 
     // Verify transaction with Paystack to ensure it's actually successful
     // First, try to extract metadata from the pending session to get the custom reference
+    console.log('[Finalize] No existing order, verifying with Paystack...');
     const verify = await verifyPaystackTransaction(reference)
     const payData = verify?.data
     
     // Use custom checkout_reference from metadata if available
     const actualPaymentReference = payData?.metadata?.checkout_reference || reference
     
-    console.log('[Orders/Finalize] Paystack verification result:', {
+    console.log('[Finalize] Paystack verification result:', {
       requestReference: reference,
       paystackReference: payData?.reference,
       checkoutReference: payData?.metadata?.checkout_reference,
@@ -78,7 +82,7 @@ export async function POST(request: NextRequest) {
     });
     
     if (!payData || payData.status !== 'success') {
-      console.error('[Orders/Finalize] Payment not successful', { 
+      console.error('[Finalize] ❌ Payment not successful', { 
         reference, 
         paystackStatus: payData?.status,
         checkoutReference: payData?.metadata?.checkout_reference,
@@ -228,9 +232,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    console.log('[Finalize] ✅ Order finalized successfully:', {
+      orderId: createdOrder.id,
+      itemCount: displayItems.length,
+      totalAmount: createdOrder.total_amount,
+    });
+
     return NextResponse.json({ order: createdOrder, items: displayItems })
   } catch (err: any) {
-    console.error('[Orders/Finalize] Fatal error:', {
+    console.error('[Orders/Finalize] ❌ Fatal error:', {
       error: err.message,
       stack: err.stack,
     });

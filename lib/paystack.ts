@@ -14,7 +14,7 @@ export interface PaystackInitPayload {
   channels?: string[]
 }
 
-async function fetchWithRetry(url: string, init: RequestInit, retries = 1, timeoutMs = 20000) {
+async function fetchWithRetry(url: string, init: RequestInit, retries = 1, timeoutMs = 30000) {
   let lastError: unknown = null
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
@@ -61,6 +61,13 @@ export async function initializePaystackTransaction(payload: PaystackInitPayload
     channels: payload.channels || ['card', 'mobile_money'],
   }
 
+  console.log('[Paystack/Lib] Sending initialize request:', { 
+    amount: body.amount, 
+    reference: body.reference,
+    email: body.email,
+    hasSecret: !!secret,
+  });
+
   const res = await fetchWithRetry('https://api.paystack.co/transaction/initialize', {
     method: 'POST',
     headers: {
@@ -72,10 +79,24 @@ export async function initializePaystackTransaction(payload: PaystackInitPayload
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
+    console.error('[Paystack/Lib] Initialize failed:', {
+      status: res.status,
+      statusText: res.statusText,
+      response: text.substring(0, 500),
+    });
     throw new Error(text || 'Failed to initialize Paystack transaction')
   }
 
-  return res.json()
+  const data = await res.json();
+  console.log('[Paystack/Lib] Initialize succeeded:', {
+    status: data.status,
+    message: data.message,
+    hasData: !!data.data,
+    dataKeys: data.data ? Object.keys(data.data) : [],
+    authUrlExists: !!data.data?.authorization_url,
+  });
+
+  return data
 }
 
 export async function verifyPaystackTransaction(reference: string) {

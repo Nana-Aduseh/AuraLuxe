@@ -491,10 +491,16 @@ export default function CheckoutPage() {
       }
 
       const paystackData = await paystackRes.json();
+      console.log('[Checkout] Paystack initialize response:', paystackData);
+      
       const authorizationUrl = paystackData.data?.authorization_url || paystackData.authorization_url || paystackData.data?.data?.authorization_url || (paystackData.data && typeof paystackData.data === 'string' ? paystackData.data : null);
       const paystackReference = paystackData.data?.reference || paystackData.reference;
 
+      console.log('[Checkout] Extracted URL:', authorizationUrl);
+      console.log('[Checkout] Extracted reference:', paystackReference);
+
       if (!authorizationUrl) {
+        console.error('[Checkout] Failed to get authorization URL from response:', paystackData);
         throw new Error("No authorization URL from Paystack");
       }
 

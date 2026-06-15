@@ -33,7 +33,8 @@ export default function OrderConfirmationPage() {
     const loadOrder = async () => {
       let finalizeStarted = false;
 
-      for (let attempt = 0; attempt < 40 && !cancelled; attempt += 1) {
+      // Poll more aggressively: every 1 second instead of 2.5s, up to 120 times (2 minutes total)
+      for (let attempt = 0; attempt < 120 && !cancelled; attempt += 1) {
         try {
           // Dynamically get token in case it was set recently
           const currentToken = guestToken || 
@@ -41,6 +42,8 @@ export default function OrderConfirmationPage() {
             window.sessionStorage.getItem("aura-luxe-pending-payment-token");
           
           const tokenQuery = currentToken ? `?token=${encodeURIComponent(currentToken)}` : "";
+
+          console.log(`[OrderConfirmation] Poll attempt ${attempt + 1}/120 for reference: ${orderId}`);
 
           const response = await fetch(
             `/api/orders/by-reference/${encodeURIComponent(orderId)}${tokenQuery}`,
@@ -153,7 +156,8 @@ export default function OrderConfirmationPage() {
           }
         }
 
-        await wait(2500);
+        // Wait 1 second before next poll (faster feedback)
+        await wait(1000);
       }
 
       if (!cancelled) {
