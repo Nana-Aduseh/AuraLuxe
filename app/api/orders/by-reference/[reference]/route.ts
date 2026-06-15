@@ -27,7 +27,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const { data: orders, error: dbError } = await supabase
     .from('orders')
     .select('*')
-    .or(`payment_reference.eq.${reference},payment_reference.ilike.${reference}-%,id.eq.${looksLikeUuid ? reference : '00000000-0000-0000-0000-000000000000'}`)
+    .or(`payment_reference.eq.${reference},id.eq.${looksLikeUuid ? reference : '00000000-0000-0000-0000-000000000000'}`)
 
   if (dbError) {
     return NextResponse.json({ error: 'Failed to look up order' }, { status: 500 })
@@ -89,8 +89,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const displayItems = await enrichOrderItemsForDisplay(supabase, allItems || [])
 
   // Calculate the total across all split orders for the UI receipt header
-  const totalAmount = orders.reduce((sum, o) => sum + (o.total_amount || 0), 0)
-  const unifiedOrder = { ...primaryOrder, total_amount: totalAmount }
+  // No longer need to unify since we are on a single-order model
 
-  return NextResponse.json({ order: unifiedOrder, items: displayItems, splitOrders: orders })
+  return NextResponse.json({ order: primaryOrder, items: displayItems })
 }

@@ -20,11 +20,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Supabase admin client not configured' }, { status: 500 })
     }
 
+    const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(reference)
+
     // Check if an order already exists for this payment reference
     const { data: existingOrders, error: refErr } = await supabase
       .from('orders')
       .select('*')
-      .eq('payment_reference', reference)
+      .or(`payment_reference.eq.${reference},id.eq.${looksLikeUuid ? reference : '00000000-0000-0000-0000-000000000000'}`)
 
     if (refErr) {
       console.error('Order lookup failed:', refErr)
@@ -93,35 +95,6 @@ export async function POST(request: NextRequest) {
     const metadata = (payData.metadata || {}) as any
     const cartItems = Array.isArray(metadata.cart_items) ? metadata.cart_items : []
     const totalAmount = Number(metadata.total_amount ?? Number(payData.amount) / 100)
-
-    if (existingOrder) {
-      // Update all existing split orders associated with this reference
-      const orderIds = existingOrders.map(o => o.id)
-      const { error: updateError } = await supabase
-        .from('orders')
-        .update({
-          status: 'processing',
-          confirmation_status: 'not_confirmed',
-          completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .in('id', orderIds)
-
-      if (updateError) {
-        console.error('Order update failed:', updateError)
-        return NextResponse.json({ error: updateError.message }, { status: 500 })
-      }
-
-      const { data: items } = await supabase.from('order_items').select('*').in('order_id', orderIds)
-      const { data: freshOrders } = await supabase.from('orders').select('*').in('id', orderIds)
-      const displayItems = await enrichOrderItemsForDisplay(supabase, items || [])
-      const currentTotal = (freshOrders || []).reduce((sum, o) => sum + (o.total_amount || 0), 0)
-      
-      return NextResponse.json({ 
-        order: { ...(freshOrders?.[0] || existingOrder), total_amount: currentTotal }, 
-        items: displayItems 
-      })
-    }
 
     if (cartItems.length === 0) {
       return NextResponse.json({ error: 'Missing checkout metadata' }, { status: 400 })
