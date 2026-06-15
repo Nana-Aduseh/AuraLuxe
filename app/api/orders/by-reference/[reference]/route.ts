@@ -58,6 +58,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         // to the client but do not create or update DB entries here. The client
         // will call the finalize endpoint to persist the order when appropriate.
         return NextResponse.json({ verified: true, payData, items: displayItems })
+      } else if (payData) {
+        console.log(`[ByReference] ❌ Payment not successful. Status: ${payData.status}`);
+        return NextResponse.json({ verified: false, payData, error: `Payment status: ${payData.status}` }, { status: 400 })
       }
     } catch (err) {
       console.error('[ByReference] Verification check failed:', err)

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { initializePaystackTransaction } from '@/lib/paystack'
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,20 +9,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields: email, amountGhs, reference' }, { status: 400 })
     }
 
-    console.log('[Paystack/Initialize] Request:', { email, amountGhs, reference, callbackUrl: callback_url });
+    const actualCallbackUrl = callback_url || `${new URL(request.url).origin}/order-confirmation/${reference}`;
+    console.log('[Paystack/Initialize] Request:', { email, amountGhs, reference, callbackUrl: actualCallbackUrl });
 
-    const init = await initializePaystackTransaction({
-      email,
-      amountGhs,
-      reference,
-      callback_url: callback_url || `${new URL(request.url).origin}/order-confirmation/${reference}`,
-      metadata,
-      firstname,
-      lastname,
-      phone,
-      currency: 'GHS',
-      channels: ['card', 'mobile_money'],
-    })
+    const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email,
+        amount: Math.round(amountGhs * 100),
+        reference,
+        callback_url: actualCallbackUrl,
+        metadata,
+        firstname,
+        lastname,
+        phone,
+        currency: 'GHS',
+        channels: ['card', 'mobile_money'],
+      }),
+    });
+
+    const init = await paystackRes.json();
+
+    if (!paystackRes.ok) {
+      throw new Error(init.message || 'Paystack initialization failed');
+    }
 
     console.log('[Paystack/Initialize] Response received:', {
       status: init.status,

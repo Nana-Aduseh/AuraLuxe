@@ -21,6 +21,7 @@ export default function OrderConfirmationPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isConfirmingPayment, setIsConfirmingPayment] = useState(true);
+  const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
 
   const orderId = params.orderId as string;
   const guestToken = searchParams.get("guestToken") || searchParams.get("token");
@@ -28,141 +29,130 @@ export default function OrderConfirmationPage() {
   useEffect(() => {
     let cancelled = false;
 
-    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
     const loadOrder = async () => {
-      let finalizeStarted = false;
+      try {
+        // Get token from URL or session
+        const currentToken = guestToken || 
+          window.sessionStorage.getItem("aura-luxe-guest-order-token") ||
+          window.sessionStorage.getItem("aura-luxe-pending-payment-token");
+        
+        const tokenQuery = currentToken ? `?token=${encodeURIComponent(currentToken)}` : "";
 
-      // Poll more aggressively: every 1 second instead of 2.5s, up to 120 times (2 minutes total)
-      for (let attempt = 0; attempt < 120 && !cancelled; attempt += 1) {
-        try {
-          // Dynamically get token in case it was set recently
-          const currentToken = guestToken || 
-            window.sessionStorage.getItem("aura-luxe-guest-order-token") ||
-            window.sessionStorage.getItem("aura-luxe-pending-payment-token");
-          
-          const tokenQuery = currentToken ? `?token=${encodeURIComponent(currentToken)}` : "";
+        console.log(`[OrderConfirmation] Loading order for reference: ${orderId}`);
 
-          console.log(`[OrderConfirmation] Poll attempt ${attempt + 1}/120 for reference: ${orderId}`);
+        // Single API call - no polling
+        const response = await fetch(
+          `/api/orders/by-reference/${encodeURIComponent(orderId)}${tokenQuery}`,
+          { cache: "no-store" },
+        );
 
-          const response = await fetch(
-            `/api/orders/by-reference/${encodeURIComponent(orderId)}${tokenQuery}`,
-            { cache: "no-store" },
-          );
-
-          if (response.ok) {
-            const payload = await response.json();
-
-            if (payload.order) {
-              setIsConfirmingPayment(false);
-              setOrder(payload.order);
-              persistGuestOrderContext({
-                orderId: payload.order.id,
-                token: payload.order.guest_access_token || currentToken,
-                email: payload.order.guest_email || null,
-              });
-
-              setOrderItems(Array.isArray(payload.items) ? payload.items : []);
-              setLoading(false);
-              return;
-            }
-
-            if (payload.verified && payload.payData) {
-              const payData = payload.payData as any;
-              const metadata = (payData.metadata || {}) as any;
-              const cartItems = Array.isArray(metadata.cart_items) ? metadata.cart_items : [];
-
-              const tempOrder = {
-                id: metadata.checkout_reference || payData.reference,
-                payment_reference: payData.reference,
-                confirmation_status: "not_confirmed",
-                status: "processing",
-                total_amount: Number(metadata.total_amount ?? Number(payData.amount) / 100),
-                guest_access_token: metadata.guest_token || currentToken || null,
-                guest_email: metadata.guest_info?.email || null,
-                created_at: payData.created_at || new Date().toISOString(),
-              };
-
-              setOrder(tempOrder);
-              setOrderItems(Array.isArray(payload.items) ? payload.items : cartItems);
-              setIsConfirmingPayment(false);
-              setLoading(false);
-
-              // Attempt to finalize the order if we haven't already
-              if (!finalizeStarted) {
-                finalizeStarted = true;
-                try {
-                  console.log(`[OrderConfirmation] Calling finalize endpoint for reference: ${payData.reference}`);
-                  const finalizeRes = await fetch("/api/orders/finalize", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ reference: payData.reference, token: currentToken }),
-                  });
-
-                  if (finalizeRes.ok) {
-                    console.log(`[OrderConfirmation] Finalize call succeeded`);
-
-                    const finalized = await finalizeRes.json();
-                    if (finalized.order) {
-                      console.log(`[OrderConfirmation] Order finalized:`, {
-                        orderId: finalized.order.id,
-                        confirmationStatus: finalized.order.confirmation_status,
-                        totalAmount: finalized.order.total_amount,
-                        itemsCount: Array.isArray(finalized.items) ? finalized.items.length : 0,
-                      });
-                      setOrder(finalized.order);
-                      setOrderItems(Array.isArray(finalized.items) ? finalized.items : (Array.isArray(payload.items) ? payload.items : cartItems));
-                      persistGuestOrderContext({
-                        orderId: finalized.order.id,
-                        token: finalized.order.guest_access_token || currentToken,
-                        email: finalized.order.guest_email || null,
-                      });
-                      
-                      // Clear cart after successful order finalization
-                      console.log(`[OrderConfirmation] Clearing cart items after order finalization`);
-                      if (finalized.order.user_id) {
-                        // Authenticated user - clear from database
-                        await clearCart(finalized.order.user_id).catch(() => null);
-                      } else {
-                        // Guest user - clear from localStorage
-                        clearGuestCartItems();
-                      }
-                      window.sessionStorage.removeItem("aura-luxe-checkout-state-v2");
-                      
-                      // Notify header component to update cart counter
-                      window.dispatchEvent(new Event("aura-luxe-cart-updated"));
-                      
-                      // If fully confirmed now, we can stop polling
-                      if (finalized.order.confirmation_status === "confirmed") return;
-                    }
-                  } else {
-                    const err = await finalizeRes.json().catch(() => null);
-                    console.error("Finalize failed:", err);
-                    finalizeStarted = false; // Allow retry on next loop
-                  }
-                } catch (e) {
-                  console.error("Finalize network error:", e);
-                  finalizeStarted = false;
-                }
-              }
-            }
-          } else if (response.status !== 404) {
-            const payload = await response.json().catch(() => null);
-            throw new Error(payload?.error || "Failed to load order");
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          if (payload?.payData?.status) {
+            setPaymentStatus(payload.payData.status);
+            throw new Error(`Your payment was ${payload.payData.status}.`);
           }
-        } catch (err) {
-          if (!cancelled) {
-            console.error("Error loading order:", err);
-          }
+          throw new Error(payload?.error || "Failed to load order");
         }
 
-        // Wait 1 second before next poll (faster feedback)
-        await wait(1000);
-      }
+        const payload = await response.json();
 
-      if (!cancelled) {
-        setLoadError("This order is still being verified. Please refresh in a moment.");
+        // Case 1: Order already exists in database
+        if (payload.order) {
+          console.log(`[OrderConfirmation] Found order in database:`, { orderId: payload.order.id });
+          setIsConfirmingPayment(false);
+          setOrder(payload.order);
+          persistGuestOrderContext({
+            orderId: payload.order.id,
+            token: payload.order.guest_access_token || currentToken,
+            email: payload.order.guest_email || null,
+          });
+          setOrderItems(Array.isArray(payload.items) ? payload.items : []);
+          setLoading(false);
+          return;
+        }
+
+        // Case 2: Payment verified by Paystack but order not yet in database
+        if (payload.verified && payload.payData) {
+          const payData = payload.payData as any;
+          const metadata = (payData.metadata || {}) as any;
+          const cartItems = Array.isArray(metadata.cart_items) ? metadata.cart_items : [];
+
+          console.log(`[OrderConfirmation] Payment verified with Paystack, showing receipt immediately`);
+
+          // Show receipt immediately - payment is confirmed by Paystack
+          const tempOrder = {
+            id: metadata.checkout_reference || payData.reference,
+            payment_reference: payData.reference,
+            confirmation_status: "confirmed",
+            status: "processing",
+            total_amount: Number(metadata.total_amount ?? Number(payData.amount) / 100),
+            guest_access_token: metadata.guest_token || currentToken || null,
+            guest_email: metadata.guest_info?.email || null,
+            created_at: payData.created_at || new Date().toISOString(),
+          };
+
+          setOrder(tempOrder);
+          setOrderItems(Array.isArray(payload.items) ? payload.items : cartItems);
+          setIsConfirmingPayment(false);
+          setLoading(false);
+
+          // Finalize in background - don't block the receipt display
+          console.log(`[OrderConfirmation] Finalizing order in background for reference: ${payData.reference}`);
+          try {
+            const finalizeRes = await fetch("/api/orders/finalize", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ reference: payData.reference, token: currentToken }),
+            });
+
+            if (finalizeRes.ok) {
+              const finalized = await finalizeRes.json();
+              if (finalized.order) {
+                console.log(`[OrderConfirmation] Order finalized in background:`, {
+                  orderId: finalized.order.id,
+                  confirmationStatus: finalized.order.confirmation_status,
+                });
+                // Update with finalized order details
+                setOrder(finalized.order);
+                setOrderItems(Array.isArray(finalized.items) ? finalized.items : cartItems);
+                persistGuestOrderContext({
+                  orderId: finalized.order.id,
+                  token: finalized.order.guest_access_token || currentToken,
+                  email: finalized.order.guest_email || null,
+                });
+
+                // Clear cart after successful order finalization
+                if (finalized.order.user_id) {
+                  await clearCart(finalized.order.user_id).catch(() => null);
+                } else {
+                  clearGuestCartItems();
+                }
+                window.sessionStorage.removeItem("aura-luxe-checkout-state-v2");
+                window.dispatchEvent(new Event("aura-luxe-cart-updated"));
+              }
+            } else {
+              const err = await finalizeRes.json().catch(() => null);
+              console.error("Finalize failed (non-blocking):", err);
+              // Don't block receipt display even if finalize fails
+            }
+          } catch (e) {
+            console.error("Finalize network error (non-blocking):", e);
+            // Don't block receipt display even if finalize errors
+          }
+          return;
+        }
+
+        // Case 3: No order found anywhere
+        console.log(`[OrderConfirmation] Order not found in database or Paystack`);
+        setLoadError("Payment could not be verified. Your payment may have been cancelled or failed. Please check with support.");
         setLoading(false);
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Error loading order:", err);
+          setLoadError(err instanceof Error ? err.message : "Failed to load order");
+          setLoading(false);
+        }
       }
     };
 
@@ -183,11 +173,9 @@ export default function OrderConfirmationPage() {
         <div className="flex flex-col items-center justify-center gap-4 py-20 px-4 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600"></div>
           <div>
-            <h1 className="text-lg font-semibold text-gray-900">
-              {isConfirmingPayment ? "Confirming payment" : "Loading order details"}
-            </h1>
+            <h1 className="text-lg font-semibold text-gray-900">Verifying payment</h1>
             <p className="mt-1 text-sm text-gray-600">
-              {isConfirmingPayment ? "Please wait while we verify your Paystack payment and load your order." : "Please wait while we load your order information."}
+              Just a moment while we verify your payment with Paystack...
             </p>
           </div>
         </div>
@@ -196,28 +184,61 @@ export default function OrderConfirmationPage() {
   }
 
   if (loadError) {
+    if (paymentStatus === 'abandoned' || paymentStatus === 'failed') {
+      return (
+        <main className="min-h-screen bg-white">
+          <div className="max-w-2xl mx-auto px-4 py-16 text-center">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-8">
+              <h1 className="text-2xl font-bold text-red-900 mb-3">Payment {paymentStatus === 'abandoned' ? 'Cancelled' : 'Failed'}</h1>
+              <p className="text-red-700 mb-8">
+                It looks like you {paymentStatus === 'abandoned' ? 'cancelled the payment before completing it' : 'had an issue completing the payment'}. You have not been charged.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button asChild className="bg-amber-600 hover:bg-amber-700 text-white px-8">
+                  <Link href="/checkout">Return to Checkout</Link>
+                </Button>
+                <Button asChild variant="outline" className="px-8">
+                  <Link href="/cart">Back to Cart</Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </main>
+      );
+    }
+
     return (
       <main className="min-h-screen bg-white">
         <div className="max-w-2xl mx-auto px-4 py-16">
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
-            <h1 className="text-2xl font-bold text-gray-900 mb-3">Payment not completed</h1>
-            <p className="text-gray-700 mb-6">{loadError}</p>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <h1 className="text-2xl font-bold text-gray-900 mb-3">Payment verification failed</h1>
+            <p className="text-gray-700 mb-6">
+              We couldn't verify your payment with Paystack. This usually means:
+            </p>
+            <ul className="list-disc list-inside text-gray-700 mb-6 space-y-2">
+              <li>Your payment was cancelled or declined</li>
+              <li>The payment reference is invalid</li>
+              <li>There was a network issue during verification</li>
+            </ul>
+            <p className="text-gray-700 mb-6">
+              <strong>Error details:</strong> {loadError}
+            </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <Button asChild className="bg-amber-600 hover:bg-amber-700 text-white">
-                <Link href="/checkout">Return to Checkout</Link>
+                <Link href="/checkout">Try Again</Link>
               </Button>
               <Button asChild variant="outline">
                 <Link href="/cart">Back to Cart</Link>
               </Button>
               <a
                 href={`https://wa.me/233542426135?text=${encodeURIComponent(
-                  `I did not receive my Paystack verification code for reference ${orderId}. Please send it via WhatsApp instead.`,
+                  `I'm having trouble verifying my payment for reference ${orderId}. Can you help?`,
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center px-4 py-2 border rounded text-sm"
+                className="inline-flex items-center justify-center px-4 py-2 border rounded text-sm hover:bg-gray-50"
               >
-                Receive code via WhatsApp
+                Contact Support via WhatsApp
               </a>
             </div>
           </div>
