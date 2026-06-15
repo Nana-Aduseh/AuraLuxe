@@ -28,15 +28,17 @@ export default function OrderConfirmationPage() {
     const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
     const loadOrder = async () => {
-      const fallbackToken =
-        guestToken ||
-        window.sessionStorage.getItem("aura-luxe-guest-order-token") ||
-        window.sessionStorage.getItem("aura-luxe-pending-payment-token");
+      let finalizeStarted = false;
 
-      const tokenQuery = fallbackToken ? `?token=${encodeURIComponent(fallbackToken)}` : "";
-
-      for (let attempt = 0; attempt < 24 && !cancelled; attempt += 1) {
+      for (let attempt = 0; attempt < 40 && !cancelled; attempt += 1) {
         try {
+          // Dynamically get token in case it was set recently
+          const currentToken = guestToken || 
+            window.sessionStorage.getItem("aura-luxe-guest-order-token") ||
+            window.sessionStorage.getItem("aura-luxe-pending-payment-token");
+          
+          const tokenQuery = currentToken ? `?token=${encodeURIComponent(currentToken)}` : "";
+
           const response = await fetch(
             `/api/orders/by-reference/${encodeURIComponent(orderId)}${tokenQuery}`,
             { cache: "no-store" },
@@ -45,12 +47,12 @@ export default function OrderConfirmationPage() {
           if (response.ok) {
             const payload = await response.json();
 
-            if (payload.order && payload.order.confirmation_status === "confirmed") {
+            if (payload.order) {
               setIsConfirmingPayment(false);
               setOrder(payload.order);
               persistGuestOrderContext({
                 orderId: payload.order.id,
-                token: payload.order.guest_access_token || fallbackToken,
+                token: payload.order.guest_access_token || currentToken,
                 email: payload.order.guest_email || null,
               });
 
@@ -70,47 +72,51 @@ export default function OrderConfirmationPage() {
                 confirmation_status: "not_confirmed",
                 status: "processing",
                 total_amount: Number(metadata.total_amount ?? Number(payData.amount) / 100),
-                guest_access_token: metadata.guest_token || fallbackToken || null,
+                guest_access_token: metadata.guest_token || currentToken || null,
                 guest_email: metadata.guest_info?.email || null,
                 created_at: payData.created_at || new Date().toISOString(),
               };
 
               setOrder(tempOrder);
-
               setOrderItems(Array.isArray(payload.items) ? payload.items : cartItems);
+              setIsConfirmingPayment(false);
               setLoading(false);
 
-              try {
-                const finalizeRes = await fetch("/api/orders/finalize", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ reference: payData.reference, token: fallbackToken }),
-                });
+              // Attempt to finalize the order if we haven't already
+              if (!finalizeStarted) {
+                finalizeStarted = true;
+                try {
+                  const finalizeRes = await fetch("/api/orders/finalize", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ reference: payData.reference, token: currentToken }),
+                  });
 
-                if (finalizeRes.ok) {
-                  const finalized = await finalizeRes.json();
-                  if (finalized.order) {
-                    setOrder(finalized.order);
-                    setOrderItems(Array.isArray(finalized.items) ? finalized.items : (Array.isArray(payload.items) ? payload.items : cartItems));
-                    persistGuestOrderContext({
-                      orderId: finalized.order.id,
-                      token: finalized.order.guest_access_token || fallbackToken,
-                      email: finalized.order.guest_email || null,
-                    });
+                  if (finalizeRes.ok) {
+                    const finalized = await finalizeRes.json();
+                    if (finalized.order) {
+                      setOrder(finalized.order);
+                      setOrderItems(Array.isArray(finalized.items) ? finalized.items : (Array.isArray(payload.items) ? payload.items : cartItems));
+                      persistGuestOrderContext({
+                        orderId: finalized.order.id,
+                        token: finalized.order.guest_access_token || currentToken,
+                        email: finalized.order.guest_email || null,
+                      });
+                      // If fully confirmed now, we can stop polling
+                      if (finalized.order.confirmation_status === "confirmed") return;
+                    }
+                  } else {
+                    const err = await finalizeRes.json().catch(() => null);
+                    console.error("Finalize failed:", err);
+                    finalizeStarted = false; // Allow retry on next loop
                   }
-                } else {
-                  const err = await finalizeRes.json().catch(() => null);
-                  console.error("Finalize failed:", err);
+                } catch (e) {
+                  console.error("Finalize network error:", e);
+                  finalizeStarted = false;
                 }
-              } catch (e) {
-                console.error("Finalize network error:", e);
               }
-
-              return;
             }
-          }
-
-          if (response.status !== 404) {
+          } else if (response.status !== 404) {
             const payload = await response.json().catch(() => null);
             throw new Error(payload?.error || "Failed to load order");
           }
@@ -267,8 +273,8 @@ export default function OrderConfirmationPage() {
                         {item.product?.name || item.product_id || "Unknown Product"}
                       </p>
                       <p className="text-gray-600 text-xs">
-                        Color: {item.color?.color_name || (item.color_id ? "Loading..." : "N/A")} | Length: {item.product?.length_inches || (item.quantity_id ? "Loading..." : "N/A")}
-                        " | Qty: {item.quantity_ordered ?? item.quantity ?? 0}
+                        Color: {item.color?.color_name || item.color_name || (item.color_id ? "Loading..." : "N/A")} | Length: {item.product?.length_inches || item.length_inches || "N/A"}
+                        " | Qty: {item.quantity_ordered ?? item.quantity ?? 1}
                       </p>
                       {!item.product && (
                         <p className="text-xs text-orange-600 mt-1">
@@ -278,8 +284,12 @@ export default function OrderConfirmationPage() {
                     </div>
                     <p className="font-semibold text-gray-900 whitespace-nowrap">
                       {formatPrice(
-                        (item.product?.price || item.price_at_purchase || item.price || 0) *
-                          (item.quantity_ordered ?? item.quantity ?? 1),
+                        (item.price_at_purchase ?? 
+                         item.price ?? 
+                         (item.product?.promo_enabled && item.product?.discounted_price 
+                           ? item.product.discounted_price 
+                           : item.product?.price ?? 0)) * 
+                        (item.quantity_ordered ?? item.quantity ?? 1)
                       )}
                     </p>
                   </div>

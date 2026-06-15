@@ -140,6 +140,8 @@ export default function CheckoutPage() {
       const mode =
         urlMode === "buy-now"
           ? "buy-now"
+          : urlMode === "cart"
+            ? "cart"
           : urlMode === "guest" || storedMode === "guest"
             ? "guest"
             : storedMode === "buy-now"
@@ -147,6 +149,11 @@ export default function CheckoutPage() {
               : "cart";
 
       setCheckoutMode(mode);
+
+      // If we are explicitly in cart or guest mode, clear any stale buy-now item to prevent confusion
+      if (mode === "cart" || mode === "guest") {
+        window.sessionStorage.removeItem("aura-luxe-buy-now");
+      }
 
       if (user && getGuestCheckoutDraft()) {
         await syncGuestDraftToUser(user.id);

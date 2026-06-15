@@ -18,27 +18,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Supabase admin client not configured' }, { status: 500 })
   }
 
-  const { data: orderByPaymentReference, error: paymentReferenceError } = await supabase
+  // Check if it's in our DB first
+  const { data: order, error: dbError } = await supabase
     .from('orders')
     .select('*')
-    .eq('payment_reference', reference)
-    .eq('confirmation_status', 'confirmed')
+    .or(`payment_reference.eq.${reference},id.eq.${looksLikeUuid ? reference : '00000000-0000-0000-0000-000000000000'}`)
     .maybeSingle()
 
-  const { data: orderById, error: idError } = orderByPaymentReference || !looksLikeUuid
-    ? { data: null, error: null }
-    : await supabase
-        .from('orders')
-        .select('*')
-        .eq('id', reference)
-        .eq('confirmation_status', 'confirmed')
-        .maybeSingle()
-
-  if (paymentReferenceError || idError) {
+  if (dbError) {
     return NextResponse.json({ error: 'Failed to look up order' }, { status: 500 })
   }
-
-  const order = orderByPaymentReference || orderById
 
   if (!order) {
     // If no confirmed order found, attempt to verify the payment with Paystack

@@ -412,7 +412,7 @@ export default function CartPage() {
                   asChild
                   className="w-full bg-primary hover:bg-primary/90 text-white py-6 font-semibold text-base rounded-lg transition-all hover:shadow-lg"
                 >
-                  <Link href={isGuestCart ? "/checkout?mode=guest" : "/checkout"}>Proceed to Checkout</Link>
+                  <Link href={isGuestCart ? "/checkout?mode=guest" : "/checkout?mode=cart"}>Proceed to Checkout</Link>
                 </Button>
 
                 {isGuestCart && (

@@ -11,10 +11,18 @@ import { fetchAccessibleOrdersAfterAuth } from '@/lib/guest-orders'
 
 interface OrderItem {
   product_id: string
-  product_name: string
-  quantity: number
-  price: number
+  product?: {
+    name: string
+    length_inches?: number
+    price?: number
+  }
+  product_name?: string
+  quantity_ordered?: number
+  quantity?: number
+  price_at_purchase?: number
+  price?: number
   color_name?: string
+  color?: { color_name: string }
   length_inches?: number
 }
 
@@ -28,6 +36,7 @@ interface Order {
   delivery_status: string | null
   order_type: string
   items?: OrderItem[]
+  order_items?: OrderItem[] // Handle Supabase default join naming
 }
 
 export default function OrdersPage() {
@@ -53,16 +62,89 @@ export default function OrdersPage() {
 
       try {
         const ordersData = await fetchAccessibleOrdersAfterAuth()
+        let allOrders = (ordersData as Order[]) || []
 
-        if (ordersData) {
+        // --- RECOVERY LOGIC FOR "NOT PLACED" ORDERS ---
+        // Check local storage for any order IDs/References the browser remembers
+        const guestOrdersJson = typeof window !== 'undefined' ? window.localStorage.getItem('aura-luxe-guest-orders') : null;
+        const localOrderIds: string[] = [];
+        
+        if (guestOrdersJson) {
+          try {
+            const parsed = JSON.parse(guestOrdersJson);
+            if (Array.isArray(parsed)) {
+              parsed.forEach(item => { if (item.orderId) localOrderIds.push(item.orderId); });
+            }
+          } catch (e) { /* ignore */ }
+        }
+
+        // Check for a pending reference from a recent checkout attempt
+        const pendingRef = typeof window !== 'undefined' ? window.sessionStorage.getItem('aura-luxe-pending-payment-reference') : null;
+        if (pendingRef) localOrderIds.push(pendingRef);
+
+        // Find IDs that are NOT in the database results
+        const missingIds = [...new Set(localOrderIds)].filter(id => 
+          !allOrders.some(o => o.id === id || o.payment_reference === id)
+        );
+
+        if (missingIds.length > 0) {
+          const recovered = await Promise.all(
+            missingIds.map(async (id) => {
+              try {
+                const gToken = typeof window !== 'undefined' ? (window.sessionStorage.getItem('aura-luxe-guest-order-token') || window.sessionStorage.getItem('aura-luxe-pending-payment-token')) : null;
+                const tokenQuery = gToken ? `?token=${encodeURIComponent(gToken)}` : "";
+                const res = await fetch(`/api/orders/by-reference/${encodeURIComponent(id)}${tokenQuery}`);
+                if (res.ok) {
+                  const data = await res.json();
+                  if (data.verified || data.order) {
+                    // If verified but not in DB, trigger finalize to sync it for the admin
+                    if (data.verified && !data.order) {
+                      await fetch("/api/orders/finalize", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ reference: id, token: gToken }),
+                      }).catch(err => console.error("Auto-recovery finalize failed:", err));
+                    }
+
+                    return data.order || {
+                      id: data.payData?.reference || id,
+                      order_number: "RECOVERED",
+                      created_at: data.payData?.created_at || new Date().toISOString(),
+                      total_amount: data.payData?.amount ? data.payData.amount / 100 : 0,
+                      status: 'processing',
+                      confirmation_status: 'not_confirmed',
+                      items: data.items || []
+                    };
+                  }
+                }
+              } catch (e) { return null; }
+              return null;
+            })
+          );
+          const validRecovered = recovered.filter(o => o !== null) as Order[];
+          allOrders = [...validRecovered, ...allOrders];
+        }
+        // ----------------------------------------------
+
+        if (allOrders.length > 0) {
           // Fetch items for each order
           const ordersWithItems = await Promise.all(
-            (ordersData as Order[]).map(async (order) => {
+            allOrders.map(async (order: any) => {
+              // If items are already present (e.g. from a Supabase join), use them
+              const existingItems = order.items || order.order_items;
+              if (existingItems && existingItems.length > 0) {
+                return { ...order, items: existingItems };
+              }
+
               try {
+                const gToken = typeof window !== 'undefined' ? window.sessionStorage.getItem('aura-luxe-guest-order-token') : null;
+                const tokenQuery = gToken ? `?token=${encodeURIComponent(gToken)}` : "";
+                
                 const response = await fetch(
-                  `/api/orders/by-reference/${encodeURIComponent(order.id)}`,
+                  `/api/orders/by-reference/${encodeURIComponent(order.id)}${tokenQuery}`,
                   { cache: 'no-store' },
                 )
+
                 if (response.ok) {
                   const payload = await response.json()
                   return {
@@ -210,7 +292,7 @@ export default function OrdersPage() {
                                   key={idx}
                                   className="inline-block bg-amber-50 text-amber-900 text-sm px-3 py-1 rounded-full"
                                 >
-                                  {item.product_name} ×{item.quantity}
+                                  {item.product?.name || item.product_name || 'Item'} ×{item.quantity_ordered ?? item.quantity ?? 0}
                                 </span>
                               ))
                             ) : (
@@ -326,16 +408,18 @@ export default function OrdersPage() {
                         <div className="space-y-3 mb-3 border-b border-gray-200 pb-3">
                           {order.items.map((item, idx) => (
                             <div key={idx} className="text-sm">
-                              <p className="font-medium text-gray-900">{item.product_name}</p>
+                              <p className="font-medium text-gray-900">
+                                {item.product?.name || item.product_name || 'Unknown Product'}
+                              </p>
                               <div className="mt-2 text-xs text-gray-600 space-y-1">
-                                {item.color_name && item.color_name !== 'Default' && (
-                                  <p>Color: {item.color_name}</p>
+                                {(item.color?.color_name || item.color_name) && (item.color?.color_name || item.color_name) !== 'Default' && (
+                                  <p>Color: {item.color?.color_name || item.color_name}</p>
                                 )}
-                                {item.length_inches && (
-                                  <p>Length: {item.length_inches}"</p>
+                                {(item.product?.length_inches || item.length_inches) && (
+                                  <p>Length: {item.product?.length_inches || item.length_inches}"</p>
                                 )}
-                                {item.quantity && (
-                                  <p>Quantity: {item.quantity}</p>
+                                {(item.quantity_ordered ?? item.quantity) && (
+                                  <p>Quantity: {item.quantity_ordered ?? item.quantity}</p>
                                 )}
                               </div>
                             </div>
