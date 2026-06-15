@@ -7,27 +7,52 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.text()
     const signature = request.headers.get('x-paystack-signature')
 
+    console.log('[Webhook] Received webhook request');
+    console.log('[Webhook] Signature present:', !!signature);
+
     if (!signature) {
+      console.error('[Webhook] Missing signature header');
       return NextResponse.json({ error: 'Missing signature' }, { status: 401 })
     }
 
     // Verify webhook signature
-    if (!verifyPaystackWebhookSignature(rawBody, signature)) {
+    const isValid = verifyPaystackWebhookSignature(rawBody, signature);
+    console.log('[Webhook] Signature valid:', isValid);
+    
+    if (!isValid) {
+      console.error('[Webhook] Signature verification failed');
+      console.error('[Webhook] Raw body:', rawBody.substring(0, 200));
+      console.error('[Webhook] Signature:', signature);
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
     }
 
     const event = JSON.parse(rawBody)
     const { event: eventType, data } = event
 
+    console.log('[Webhook] Event type:', eventType);
+    console.log('[Webhook] Reference:', data?.reference);
+
     // Only handle successful transactions
     if (eventType !== 'charge.success') {
+      console.log('[Webhook] Ignoring event type:', eventType);
       return NextResponse.json({ success: true, message: 'Event ignored' })
     }
 
     const { reference, amount, status, metadata } = data
-    if (!reference || status !== 'success') {
+    
+    // Use custom checkout_reference from metadata if available (sent from client)
+    // Otherwise fallback to Paystack's reference
+    const paymentReference = metadata?.checkout_reference || reference
+    
+    if (!paymentReference || status !== 'success') {
+      console.log('[Webhook] Transaction not successful:', { reference, status });
       return NextResponse.json({ success: true, message: 'Transaction not successful' })
     }
+
+    console.log('[Webhook] Processing successful transaction:', {
+      paystackReference: reference,
+      checkoutReference: paymentReference,
+    });
 
     const supabase = createAdminClient()
     if (!supabase) return NextResponse.json({ error: 'Supabase missing' }, { status: 500 })
@@ -36,7 +61,7 @@ export async function POST(request: NextRequest) {
     const { data: existingOrders } = await supabase
       .from('orders')
       .select('id')
-      .eq('payment_reference', reference)
+      .eq('payment_reference', paymentReference)
       .limit(1)
 
     if (existingOrders && existingOrders.length > 0) {
@@ -53,7 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('[Webhook] Creating single order for payment:', {
-      reference,
+      paymentReference,
       itemCount: cartItems.length,
       totalAmount,
       guestPhone: guestInfo.phone,
@@ -67,7 +92,7 @@ export async function POST(request: NextRequest) {
         user_id: metadata?.user_id || null,
         total_amount: totalAmount,
         status: 'processing',
-        payment_reference: reference,
+        payment_reference: paymentReference,
         order_type: metadata?.delivery_type === 'pickup' ? 'pickup' : 'delivery',
         confirmation_status: 'not_confirmed',
         completed_at: new Date().toISOString(),
@@ -128,10 +153,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log('[Webhook] Successfully processed order:', reference)
+    console.log('[Webhook] Successfully processed order:', paymentReference)
     return NextResponse.json({ success: true, message: 'Order processed successfully' })
   } catch (err: any) {
-    console.error('Webhook error:', err)
+    console.error('[Webhook] Fatal error:', {
+      error: err.message,
+      stack: err.stack,
+    });
     return NextResponse.json({ success: false, error: err.message }, { status: 500 })
   }
 }

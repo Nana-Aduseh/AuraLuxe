@@ -61,9 +61,28 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify transaction with Paystack to ensure it's actually successful
+    // First, try to extract metadata from the pending session to get the custom reference
     const verify = await verifyPaystackTransaction(reference)
     const payData = verify?.data
+    
+    // Use custom checkout_reference from metadata if available
+    const actualPaymentReference = payData?.metadata?.checkout_reference || reference
+    
+    console.log('[Orders/Finalize] Paystack verification result:', {
+      requestReference: reference,
+      paystackReference: payData?.reference,
+      checkoutReference: payData?.metadata?.checkout_reference,
+      status: payData?.status,
+      verified: !!payData,
+      amount: payData?.amount,
+    });
+    
     if (!payData || payData.status !== 'success') {
+      console.error('[Orders/Finalize] Payment not successful', { 
+        reference, 
+        paystackStatus: payData?.status,
+        checkoutReference: payData?.metadata?.checkout_reference,
+      });
       return NextResponse.json({ error: 'Transaction not successful' }, { status: 400 })
     }
 
@@ -211,7 +230,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ order: createdOrder, items: displayItems })
   } catch (err: any) {
-    console.error('Finalize endpoint error:', err)
+    console.error('[Orders/Finalize] Fatal error:', {
+      error: err.message,
+      stack: err.stack,
+    });
     return NextResponse.json({ error: err.message || 'Finalize failed' }, { status: 500 })
   }
 }
