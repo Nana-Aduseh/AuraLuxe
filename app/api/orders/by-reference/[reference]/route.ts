@@ -9,9 +9,14 @@ interface RouteParams {
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const supabase = createAdminClient()
+  let supabase = createAdminClient()
   const serverSupabase = await createClient()
   
+  if (!supabase) {
+    console.warn('[ByReference] Supabase admin client not configured, falling back to standard client')
+    supabase = serverSupabase
+  }
+
   const { reference } = await params
   const token = request.nextUrl.searchParams.get('token')
   const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(reference)
@@ -49,12 +54,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     } catch (err) {
       console.error('[ByReference] Verification check failed:', err)
     }
-
-  // 2. If Paystack verification fails or is unreachable, fallback to Database lookup
-  if (!supabase) {
-    console.error('Supabase admin client not configured (SUPABASE_SERVICE_ROLE_KEY missing)')
-    return NextResponse.json({ error: 'Supabase admin client not configured' }, { status: 500 })
-  }
 
   const { data: orders, error: dbError } = await supabase
     .from('orders')

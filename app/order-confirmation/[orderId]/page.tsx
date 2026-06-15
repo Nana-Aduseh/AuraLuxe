@@ -30,139 +30,102 @@ export default function OrderConfirmationPage() {
     let cancelled = false;
 
     const loadOrder = async () => {
+      // PER USER REQUEST: Trust the redirect.
+      // Immediately build and display a receipt from local data,
+      // then create the order in the database in the background.
       try {
-        // Get token from URL or session
         const currentToken = guestToken || 
           window.sessionStorage.getItem("aura-luxe-guest-order-token") ||
           window.sessionStorage.getItem("aura-luxe-pending-payment-token");
         
-        const tokenQuery = currentToken ? `?token=${encodeURIComponent(currentToken)}` : "";
+        console.log(`[OrderConfirmation] Trusting redirect for reference: ${orderId}. Building optimistic receipt.`);
 
-        console.log(`[OrderConfirmation] Loading order for reference: ${orderId}`);
+        let fallbackItems: any[] = [];
+        let fallbackTotal = 0;
+        let fallbackDeliveryType = "delivery";
+        let fallbackGuestInfo = {};
 
-        // Single API call - no polling
-        const response = await fetch(
-          `/api/orders/by-reference/${encodeURIComponent(orderId)}${tokenQuery}`,
-          { cache: "no-store" },
-        );
+        // Reconstruct cart/order details from session/local storage
+        try {
+          const state = window.sessionStorage.getItem("aura-luxe-checkout-state-v2");
+          if (state) {
+            const parsed = JSON.parse(state);
+            fallbackDeliveryType = parsed.deliveryType || "delivery";
+            fallbackGuestInfo = {
+              firstName: parsed.firstName,
+              lastName: parsed.lastName,
+              email: parsed.email,
+              phone: parsed.phone,
+              address: parsed.address,
+              town: parsed.town,
+              region: parsed.region,
+            };
 
-        if (!response.ok) {
-          const payload = await response.json().catch(() => null);
-          if (payload?.payData?.status) {
-            setPaymentStatus(payload.payData.status);
-            throw new Error(`Your payment was ${payload.payData.status}.`);
-          }
-          
-          // PER USER REQUEST: Trust the redirect and force success if backend crashes
-          console.warn("[OrderConfirmation] Backend error, but trusting redirect as requested:", payload?.error);
-          
-          setOrder({
-            id: orderId,
-            payment_reference: orderId,
-            confirmation_status: "confirmed",
-            status: "processing",
-            total_amount: 0,
-            guest_access_token: currentToken || null,
-            created_at: new Date().toISOString(),
-          });
-          setOrderItems([]);
-          setIsConfirmingPayment(false);
-          setLoading(false);
-          return;
-        }
-
-        const payload = await response.json();
-
-        // Case 1: Order already exists in database
-        if (payload.order) {
-          console.log(`[OrderConfirmation] Found order in database:`, { orderId: payload.order.id });
-          setIsConfirmingPayment(false);
-          setOrder(payload.order);
-          persistGuestOrderContext({
-            orderId: payload.order.id,
-            token: payload.order.guest_access_token || currentToken,
-            email: payload.order.guest_email || null,
-          });
-          setOrderItems(Array.isArray(payload.items) ? payload.items : []);
-          setLoading(false);
-          return;
-        }
-
-        // Case 2: Payment verified by Paystack but order not yet in database
-        if (payload.verified && payload.payData) {
-          const payData = payload.payData as any;
-          const metadata = (payData.metadata || {}) as any;
-          const cartItems = Array.isArray(metadata.cart_items) ? metadata.cart_items : [];
-
-          console.log(`[OrderConfirmation] Payment verified with Paystack, showing receipt immediately`);
-
-          // Show receipt immediately - payment is confirmed by Paystack
-          const tempOrder = {
-            id: metadata.checkout_reference || payData.reference,
-            payment_reference: payData.reference,
-            confirmation_status: "confirmed",
-            status: "processing",
-            total_amount: Number(metadata.total_amount ?? Number(payData.amount) / 100),
-            guest_access_token: metadata.guest_token || currentToken || null,
-            guest_email: metadata.guest_info?.email || null,
-            created_at: payData.created_at || new Date().toISOString(),
-          };
-
-          setOrder(tempOrder);
-          setOrderItems(Array.isArray(payload.items) ? payload.items : cartItems);
-          setIsConfirmingPayment(false);
-          setLoading(false);
-
-          // Finalize in background - don't block the receipt display
-          console.log(`[OrderConfirmation] Finalizing order in background for reference: ${payData.reference}`);
-          try {
-            const finalizeRes = await fetch("/api/orders/finalize", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ reference: payData.reference, token: currentToken }),
-            });
-
-            if (finalizeRes.ok) {
-              const finalized = await finalizeRes.json();
-              if (finalized.order) {
-                console.log(`[OrderConfirmation] Order finalized in background:`, {
-                  orderId: finalized.order.id,
-                  confirmationStatus: finalized.order.confirmation_status,
-                });
-                // Update with finalized order details
-                setOrder(finalized.order);
-                setOrderItems(Array.isArray(finalized.items) ? finalized.items : cartItems);
-                persistGuestOrderContext({
-                  orderId: finalized.order.id,
-                  token: finalized.order.guest_access_token || currentToken,
-                  email: finalized.order.guest_email || null,
-                });
-
-                // Clear cart after successful order finalization
-                if (finalized.order.user_id) {
-                  await clearCart(finalized.order.user_id).catch(() => null);
-                } else {
-                  clearGuestCartItems();
-                }
-                window.sessionStorage.removeItem("aura-luxe-checkout-state-v2");
-                window.dispatchEvent(new Event("aura-luxe-cart-updated"));
+            if (parsed.cartItems && Array.isArray(parsed.cartItems) && parsed.cartItems.length > 0) {
+              fallbackItems = parsed.cartItems;
+              fallbackTotal = parsed.cartItems.reduce((sum: number, item: any) => sum + ((item.price_at_purchase || item.product?.price || 0) * (item.quantity_ordered || 1)), 0);
+            } else if (parsed.checkoutMode === "buy-now") {
+              const bn = window.sessionStorage.getItem("aura-luxe-buy-now");
+              if (bn) {
+                  const item = JSON.parse(bn);
+                  fallbackItems = [item];
+                  fallbackTotal = (item.price_at_purchase || item.product?.price || 0) * (item.quantity_ordered || 1);
               }
             } else {
-              const err = await finalizeRes.json().catch(() => null);
-              console.error("Finalize failed (non-blocking):", err);
-              // Don't block receipt display even if finalize fails
+              const storedCart = window.localStorage.getItem("aura-luxe-cart-guest");
+              if (storedCart) {
+                  const parsedCart = JSON.parse(storedCart);
+                  fallbackItems = parsedCart;
+                  fallbackTotal = parsedCart.reduce((sum: number, item: any) => sum + ((item.price_at_purchase || item.product?.price || 0) * (item.quantity_ordered || 1)), 0);
+              }
             }
-          } catch (e) {
-            console.error("Finalize network error (non-blocking):", e);
-            // Don't block receipt display even if finalize errors
           }
-          return;
+        } catch(e) {
+          console.error("Failed to reconstruct fallback receipt:", e);
         }
 
-        // Case 3: No order found anywhere
-        console.log(`[OrderConfirmation] Order not found in database or Paystack`);
-        setLoadError("Payment could not be verified. Your payment may have been cancelled or failed. Please check with support.");
+        // Show the optimistic receipt immediately
+        setOrder({
+          id: orderId,
+          payment_reference: orderId,
+          confirmation_status: 'confirmed',
+          status: 'processing',
+          total_amount: fallbackTotal,
+          guest_access_token: currentToken || null,
+          created_at: new Date().toISOString(),
+        });
+        setOrderItems(fallbackItems);
+        setIsConfirmingPayment(false);
         setLoading(false);
+
+        // Force DB insert in background to track the order
+        fetch("/api/orders/finalize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+              reference: orderId, 
+              token: currentToken,
+              forceFallback: true,
+              fallbackItems,
+              fallbackTotal,
+              fallbackGuestInfo,
+              fallbackDeliveryType,
+              fallbackStatus: 'processing',
+              fallbackConfirmation: 'confirmed'
+          }),
+        }).then(res => {
+            if (res.ok) {
+              console.log("[OrderConfirmation] Background finalize successful.");
+              clearGuestCartItems();
+              window.sessionStorage.removeItem("aura-luxe-checkout-state-v2");
+              window.dispatchEvent(new Event("aura-luxe-cart-updated"));
+            } else {
+              console.error("[OrderConfirmation] Background finalize failed.");
+            }
+        }).catch((err) => {
+          console.error("[OrderConfirmation] Background finalize network error:", err);
+        });
+
       } catch (err) {
         if (!cancelled) {
           console.error("Error loading order:", err);
@@ -200,29 +163,6 @@ export default function OrderConfirmationPage() {
   }
 
   if (loadError) {
-    if (paymentStatus === 'abandoned' || paymentStatus === 'failed') {
-      return (
-        <main className="min-h-screen bg-white">
-          <div className="max-w-2xl mx-auto px-4 py-16 text-center">
-            <div className="bg-red-50 border border-red-200 rounded-lg p-8">
-              <h1 className="text-2xl font-bold text-red-900 mb-3">Payment {paymentStatus === 'abandoned' ? 'Cancelled' : 'Failed'}</h1>
-              <p className="text-red-700 mb-8">
-                It looks like you {paymentStatus === 'abandoned' ? 'cancelled the payment before completing it' : 'had an issue completing the payment'}. You have not been charged.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button asChild className="bg-amber-600 hover:bg-amber-700 text-white px-8">
-                  <Link href="/checkout">Return to Checkout</Link>
-                </Button>
-                <Button asChild variant="outline" className="px-8">
-                  <Link href="/cart">Back to Cart</Link>
-                </Button>
-              </div>
-            </div>
-          </div>
-        </main>
-      );
-    }
-
     return (
       <main className="min-h-screen bg-white">
         <div className="max-w-2xl mx-auto px-4 py-16">

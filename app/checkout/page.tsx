@@ -290,6 +290,7 @@ export default function CheckoutPage() {
       showPayment,
       checkoutMode,
       isGuestFlow,
+      cartItems,
     });
   }, [
     loading,
@@ -305,6 +306,7 @@ export default function CheckoutPage() {
     showPayment,
     checkoutMode,
     isGuestFlow,
+    cartItems,
   ]);
 
   const total = cartItems.reduce((sum, item) => {
