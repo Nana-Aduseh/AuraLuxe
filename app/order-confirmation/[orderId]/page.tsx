@@ -38,12 +38,29 @@ export default function OrderConfirmationPage() {
           window.sessionStorage.getItem("aura-luxe-guest-order-token") ||
           window.sessionStorage.getItem("aura-luxe-pending-payment-token");
         
-        console.log(`[OrderConfirmation] Trusting redirect for reference: ${orderId}. Building optimistic receipt.`);
+        const tokenQuery = currentToken ? `?token=${encodeURIComponent(currentToken)}` : "";
+
+        console.log(`[OrderConfirmation] Verifying redirect for reference: ${orderId}.`);
+
+        // Verify the payment status with our backend (which queries Paystack directly)
+        const response = await fetch(`/api/orders/by-reference/${encodeURIComponent(orderId)}${tokenQuery}`, { cache: "no-store" });
+        const payload = await response.json().catch(() => null);
+
+        const isSuccess = response.ok && (payload?.verified || payload?.order);
+
+        if (!isSuccess) {
+          console.warn("[OrderConfirmation] Payment was not successful:", payload?.payData?.status);
+          setPaymentStatus(payload?.payData?.status || "failed");
+          setLoadError(`Your payment was ${payload?.payData?.status || "failed or cancelled"}.`);
+          setLoading(false);
+          return;
+        }
 
         let fallbackItems: any[] = [];
         let fallbackTotal = 0;
         let fallbackDeliveryType = "delivery";
         let fallbackGuestInfo = {};
+        let fallbackUserId: string | null = null;
 
         // Reconstruct cart/order details from session/local storage
         try {
@@ -51,6 +68,7 @@ export default function OrderConfirmationPage() {
           if (state) {
             const parsed = JSON.parse(state);
             fallbackDeliveryType = parsed.deliveryType || "delivery";
+            fallbackUserId = parsed.userId || null;
             fallbackGuestInfo = {
               firstName: parsed.firstName,
               lastName: parsed.lastName,
@@ -86,15 +104,15 @@ export default function OrderConfirmationPage() {
 
         // Show the optimistic receipt immediately
         setOrder({
-          id: orderId,
-          payment_reference: orderId,
-          confirmation_status: 'confirmed',
-          status: 'processing',
-          total_amount: fallbackTotal,
-          guest_access_token: currentToken || null,
-          created_at: new Date().toISOString(),
+          id: payload?.order?.id || payload?.payData?.reference || orderId,
+          payment_reference: payload?.payData?.reference || orderId,
+          confirmation_status: payload?.order?.confirmation_status || 'confirmed',
+          status: payload?.order?.status || 'processing',
+          total_amount: payload?.order?.total_amount || (payload?.payData?.amount ? payload.payData.amount / 100 : fallbackTotal),
+          guest_access_token: payload?.order?.guest_access_token || currentToken || null,
+          created_at: payload?.order?.created_at || payload?.payData?.created_at || new Date().toISOString(),
         });
-        setOrderItems(fallbackItems);
+        setOrderItems(payload?.items?.length > 0 ? payload.items : fallbackItems);
         setIsConfirmingPayment(false);
         setLoading(false);
 
@@ -110,6 +128,7 @@ export default function OrderConfirmationPage() {
               fallbackTotal,
               fallbackGuestInfo,
               fallbackDeliveryType,
+              fallbackUserId,
               fallbackStatus: 'processing',
               fallbackConfirmation: 'confirmed'
           }),
@@ -167,9 +186,11 @@ export default function OrderConfirmationPage() {
       <main className="min-h-screen bg-white">
         <div className="max-w-2xl mx-auto px-4 py-16">
           <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-            <h1 className="text-2xl font-bold text-gray-900 mb-3">Payment verification failed</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-3">
+              {paymentStatus === 'abandoned' ? 'Payment Cancelled' : 'Payment Failed'}
+            </h1>
             <p className="text-gray-700 mb-6">
-              We couldn't verify your payment with Paystack. This usually means:
+              We couldn't verify a successful payment. This usually means:
             </p>
             <ul className="list-disc list-inside text-gray-700 mb-6 space-y-2">
               <li>Your payment was cancelled or declined</li>

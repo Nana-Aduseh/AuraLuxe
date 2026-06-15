@@ -7,7 +7,7 @@ import { enrichOrderItemsForDisplay } from '@/lib/order-item-display'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}))
-    const { reference, token, forceFallback, fallbackItems, fallbackTotal, fallbackGuestInfo, fallbackDeliveryType, fallbackStatus, fallbackConfirmation } = body
+    const { reference, token, forceFallback, fallbackItems, fallbackTotal, fallbackGuestInfo, fallbackDeliveryType, fallbackStatus, fallbackConfirmation, fallbackUserId } = body
 
     console.log('[Finalize] Starting order finalization:', { reference, hasToken: !!token });
 
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
     const { data: createdOrder, error: createError } = await supabase
       .from('orders')
       .insert({
-        user_id: metadata?.user_id || null,
+        user_id: metadata?.user_id || fallbackUserId || null,
         total_amount: totalAmount,
         status: forceFallback && fallbackStatus ? fallbackStatus : 'processing',
         payment_reference: reference,

@@ -64,8 +64,56 @@ export default function AdminUsers({ searchQuery = "" }: AdminUsersProps) {
       }
 
       const data = payload as AdminUsersResponse;
-      setUsers(dedupeProfilesById(data.users));
+      let fetchedUsers = dedupeProfilesById(data.users);
+      
+      // Fetch guest orders to show in admin dashboard
+      const { data: guestOrders } = await supabase
+        .from("orders")
+        .select("id, total_amount, status, created_at, guest_email, guest_first_name, guest_last_name, guest_phone")
+        .is("user_id", null)
+        .order("created_at", { ascending: false });
+
+      const newOrdersMap = new Map<string, UserOrder[]>();
+      
+      if (guestOrders && guestOrders.length > 0) {
+        const guestUsersMap = new Map<string, AdminManagedProfile>();
+
+        guestOrders.forEach((order) => {
+          const identifier = order.guest_email || order.guest_phone || order.id;
+          const guestId = `guest-${identifier}`;
+          
+          if (!guestUsersMap.has(guestId)) {
+            guestUsersMap.set(guestId, {
+              id: guestId,
+              name: `${order.guest_first_name || 'Guest'} ${order.guest_last_name || ''}`.trim() || 'Guest Checkout',
+              email: order.guest_email || 'No email',
+              phone: order.guest_phone || '',
+              is_admin: false,
+            });
+            newOrdersMap.set(guestId, []);
+          }
+          
+          newOrdersMap.get(guestId)!.push({
+            id: order.id,
+            total_amount: order.total_amount,
+            status: order.status,
+            created_at: order.created_at,
+          });
+        });
+
+        fetchedUsers = [...fetchedUsers, ...Array.from(guestUsersMap.values())];
+      }
+
+      setUsers(fetchedUsers);
       setCurrentUserId(data.currentUserId);
+      
+      if (newOrdersMap.size > 0) {
+        setUserOrders((prev) => {
+          const map = new Map(prev);
+          newOrdersMap.forEach((orders, key) => map.set(key, orders));
+          return map;
+        });
+      }
     } catch (loadError) {
       setError(getLoadUsersErrorMessage(loadError));
     } finally {
@@ -166,7 +214,9 @@ export default function AdminUsers({ searchQuery = "" }: AdminUsersProps) {
       setExpandedUserId(null);
     } else {
       setExpandedUserId(userId);
-      loadUserOrders(userId);
+      if (!userId.startsWith('guest-')) {
+        loadUserOrders(userId);
+      }
     }
   };
 
@@ -238,26 +288,30 @@ export default function AdminUsers({ searchQuery = "" }: AdminUsersProps) {
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleAdmin(user);
-                    }}
-                    disabled={savingId === user.id || isCurrentUser}
-                    variant={user.is_admin ? "outline" : "default"}
-                    size="sm"
-                    className={
-                      user.is_admin
-                        ? ""
-                        : "bg-amber-600 hover:bg-amber-700 text-white"
-                    }
-                  >
-                    {savingId === user.id
-                      ? "Saving..."
-                      : user.is_admin
-                        ? "Remove Admin"
-                        : "Make Admin"}
-                  </Button>
+                  {!user.id.startsWith('guest-') ? (
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleAdmin(user);
+                      }}
+                      disabled={savingId === user.id || isCurrentUser}
+                      variant={user.is_admin ? "outline" : "default"}
+                      size="sm"
+                      className={
+                        user.is_admin
+                          ? ""
+                          : "bg-amber-600 hover:bg-amber-700 text-white"
+                      }
+                    >
+                      {savingId === user.id
+                        ? "Saving..."
+                        : user.is_admin
+                          ? "Remove Admin"
+                          : "Make Admin"}
+                    </Button>
+                  ) : (
+                    <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">Guest</span>
+                  )}
                   <span className="text-gray-400 text-lg">
                     {expandedUserId === user.id ? "▼" : "▶"}
                   </span>

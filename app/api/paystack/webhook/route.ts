@@ -157,6 +157,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Auto-claim logic for guest orders
+    if (createdOrder.guest_email && !createdOrder.user_id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', createdOrder.guest_email)
+        .maybeSingle()
+
+      if (profile) {
+        await supabase.from('orders').update({ user_id: profile.id }).eq('id', createdOrder.id)
+      }
+    }
+
     console.log('[Webhook] ✅ Successfully processed order:', paymentReference)
     console.log('[Webhook] ==============================================');
     return NextResponse.json({ success: true, message: 'Order processed successfully' })
