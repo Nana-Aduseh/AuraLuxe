@@ -1018,6 +1018,7 @@ export default function CheckoutPage() {
           }
         }}
         isLoading={processing}
+        onClose={() => setShowPrePaystack(false)}
       />
     </main>
   );

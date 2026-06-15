@@ -7,12 +7,13 @@ import { AlertCircle, MessageCircle } from 'lucide-react'
 interface PrePaystackModalProps {
   isOpen: boolean
   onProceed: () => void
+  onClose: () => void
   isLoading?: boolean
 }
 
-export function PrePaystackModal({ isOpen, onProceed, isLoading = false }: PrePaystackModalProps) {
+export function PrePaystackModal({ isOpen, onProceed, onClose, isLoading = false }: PrePaystackModalProps) {
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <div className="flex justify-center mb-4">
@@ -41,6 +42,14 @@ export function PrePaystackModal({ isOpen, onProceed, isLoading = false }: PrePa
           </DialogDescription>
         </DialogHeader>
         <div className="flex gap-3 mt-6">
+          <Button
+            onClick={onClose}
+            variant="outline"
+            disabled={isLoading}
+            className="flex-1"
+          >
+            Cancel
+          </Button>
           <Button
             onClick={onProceed}
             disabled={isLoading}
