@@ -18,26 +18,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   console.log('[ByReference] Looking up order:', { reference, hasToken: !!token });
 
-  if (!supabase) {
-    console.error('Supabase admin client not configured (SUPABASE_SERVICE_ROLE_KEY missing)')
-    return NextResponse.json({ error: 'Supabase admin client not configured' }, { status: 500 })
-  }
-
-  // Check if it's in our DB first
-  const { data: orders, error: dbError } = await supabase
-    .from('orders')
-    .select('*')
-    .or(`payment_reference.eq.${reference},id.eq.${looksLikeUuid ? reference : '00000000-0000-0000-0000-000000000000'}`)
-
-  if (dbError) {
-    return NextResponse.json({ error: 'Failed to look up order' }, { status: 500 })
-  }
-
-  console.log('[ByReference] Database lookup result:', { found: !!orders && orders.length > 0, count: orders?.length });
-
-  if (!orders || orders.length === 0) {
-    console.log('[ByReference] Order not in DB, attempting Paystack verification...');
-    // If no confirmed order found, attempt to verify the payment with Paystack
+  // 1. Verify with Paystack FIRST. 
+  // This completely bypasses the Supabase Admin error if the payment was successful,
+  // ensuring the user ALWAYS sees their receipt immediately upon redirect.
     try {
       const verify = await verifyPaystackTransaction(reference)
       const payData = verify?.data
@@ -51,12 +34,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       if (payData && payData.status === 'success') {
         const metadata = (payData.metadata || {}) as any
         const cartItems = Array.isArray(metadata.cart_items) ? metadata.cart_items : []
-        const displayItems = await enrichOrderItemsForDisplay(supabase, cartItems)
+        
+        let displayItems = cartItems
+        if (supabase) {
+          displayItems = await enrichOrderItemsForDisplay(supabase, cartItems).catch(() => cartItems)
+        }
 
         console.log('[ByReference] ✅ Payment verified in Paystack:', { itemCount: cartItems.length });
-        // If Paystack says the transaction succeeded, return the verification payload
-        // to the client but do not create or update DB entries here. The client
-        // will call the finalize endpoint to persist the order when appropriate.
         return NextResponse.json({ verified: true, payData, items: displayItems })
       } else if (payData) {
         console.log(`[ByReference] ❌ Payment not successful. Status: ${payData.status}`);
@@ -66,6 +50,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       console.error('[ByReference] Verification check failed:', err)
     }
 
+  // 2. If Paystack verification fails or is unreachable, fallback to Database lookup
+  if (!supabase) {
+    console.error('Supabase admin client not configured (SUPABASE_SERVICE_ROLE_KEY missing)')
+    return NextResponse.json({ error: 'Supabase admin client not configured' }, { status: 500 })
+  }
+
+  const { data: orders, error: dbError } = await supabase
+    .from('orders')
+    .select('*')
+    .or(`payment_reference.eq.${reference},id.eq.${looksLikeUuid ? reference : '00000000-0000-0000-0000-000000000000'}`)
+
+  if (dbError) {
+    return NextResponse.json({ error: 'Failed to look up order' }, { status: 500 })
+  }
+
+  if (!orders || orders.length === 0) {
     console.log('[ByReference] ❌ Order not found anywhere');
     return NextResponse.json({ error: 'Order not found' }, { status: 404 })
   }

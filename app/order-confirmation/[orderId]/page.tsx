@@ -52,7 +52,23 @@ export default function OrderConfirmationPage() {
             setPaymentStatus(payload.payData.status);
             throw new Error(`Your payment was ${payload.payData.status}.`);
           }
-          throw new Error(payload?.error || "Failed to load order");
+          
+          // PER USER REQUEST: Trust the redirect and force success if backend crashes
+          console.warn("[OrderConfirmation] Backend error, but trusting redirect as requested:", payload?.error);
+          
+          setOrder({
+            id: orderId,
+            payment_reference: orderId,
+            confirmation_status: "confirmed",
+            status: "processing",
+            total_amount: 0,
+            guest_access_token: currentToken || null,
+            created_at: new Date().toISOString(),
+          });
+          setOrderItems([]);
+          setIsConfirmingPayment(false);
+          setLoading(false);
+          return;
         }
 
         const payload = await response.json();
