@@ -253,13 +253,13 @@ export default function CartPage() {
             <div className="lg:col-span-2">
               <div className="space-y-4">
                 {cartItems.map((item) => {
-                  const product = item.product || {}
+                  const product = item.product || { id: '', name: '', price: 0, description: '' } as const
                   const color = item.color || {}
                   const quantity = item.quantity || {}
                   
-                  const unitPrice = getEffectiveProductPrice(product)
+                  const unitPrice = getEffectiveProductPrice(product as any)
                   const itemSubtotal = unitPrice * (item.quantity_ordered || 1)
-                  const maxStock = color.stock_quantity ?? 999
+                  const maxStock = (color as any)?.stock_quantity ?? 999
                   
                   return (
                     <div
@@ -268,10 +268,10 @@ export default function CartPage() {
                     >
                       {/* Image */}
                       <div className="w-24 h-24 sm:w-24 sm:h-24 bg-muted rounded flex-shrink-0 overflow-hidden self-start">
-                        {color.image_url || product.image_url ? (
+                        {(color as any)?.image_url || product?.image_url ? (
                           <img
-                            src={color.image_url || product.image_url || '/placeholder.png'}
-                            alt={product.name || 'Product'}
+                            src={(color as any)?.image_url || product?.image_url || '/placeholder.png'}
+                            alt={product?.name || 'Product'}
                             className="w-full h-full object-cover"
                           />
                         ) : (
@@ -282,21 +282,21 @@ export default function CartPage() {
                       {/* Details */}
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-foreground text-lg">
-                          {product.name || 'Unknown Product'}
+                          {product?.name || 'Unknown Product'}
                         </h3>
                         <p className="text-sm text-foreground/70 mt-1">
-                          Color: <span className="font-medium">{color.color_name || 'N/A'}</span>
+                          Color: <span className="font-medium">{(color as any)?.color_name || 'N/A'}</span>
                         </p>
-                        {product.product_type === 'extension' && (
+                        {product?.product_type === 'extension' && (
                           <p className="text-sm text-foreground/70 mt-2">
-                            Length: <span className="font-medium">{product.length_inches || quantity.length_inches || 'N/A'}{'"'}</span> • Weight: <span className="font-medium">{product.weight_grams || quantity.weight_grams || 'N/A'}g</span>
+                            Length: <span className="font-medium">{product?.length_inches || (quantity as any)?.length_inches || 'N/A'}{'"'}</span> • Weight: <span className="font-medium">{product?.weight_grams || (quantity as any)?.weight_grams || 'N/A'}g</span>
                           </p>
                         )}
                         <div className="flex items-center gap-4 mt-3">
                           <div>
-                            {product.promo_enabled && (product.discounted_price || 0) < (product.price || 0) && (
+                            {product?.promo_enabled && ((product?.discounted_price || 0) < (product?.price || 0)) && (
                                 <span className="text-xs text-foreground/50 line-through block">
-                                  {formatPrice(product.original_price || product.price || 0)}
+                                  {formatPrice(product?.original_price || product?.price || 0)}
                                 </span>
                             )}
                             <p className="text-lg font-semibold text-primary">
@@ -371,16 +371,16 @@ export default function CartPage() {
                 <div className="mb-6 pb-6 border-b border-border/20 max-h-64 overflow-y-auto">
                   <div className="space-y-2">
                     {cartItems.map((item) => {
-                      const product = item.product || {}
+                      const product = item.product || { id: '', name: '', price: 0, description: '' } as const
                       const color = item.color || {}
                       return (
                         <div key={item.id} className="text-sm text-foreground/80">
-                          <span className="font-medium">{product.name || 'Unknown'}</span>
-                          {color.color_name && (
-                            <span className="text-foreground/60"> ({color.color_name})</span>
+                          <span className="font-medium">{product?.name || 'Unknown'}</span>
+                          {(color as any)?.color_name && (
+                            <span className="text-foreground/60"> ({(color as any)?.color_name})</span>
                           )}
                           <div className="text-xs text-foreground/60 mt-1">
-                            {item.quantity_ordered} × {formatPrice(getEffectiveProductPrice(product))} = <span className="font-semibold">{formatPrice(getEffectiveProductPrice(product) * item.quantity_ordered)}</span>
+                            {item.quantity_ordered} × {formatPrice(getEffectiveProductPrice(product as any))} = <span className="font-semibold">{formatPrice(getEffectiveProductPrice(product as any) * (item.quantity_ordered || 1))}</span>
                           </div>
                         </div>
                       )

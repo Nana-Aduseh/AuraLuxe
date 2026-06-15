@@ -148,17 +148,13 @@ export default function ProductModal({
       };
 
       if (user) {
-        window.sessionStorage.setItem(
-          "aura-luxe-buy-now",
-          JSON.stringify(buyNowItem),
-        );
-        window.sessionStorage.setItem("aura-luxe-checkout-mode", "buy-now");
+        window.sessionStorage.setItem("aura-luxe-buy-now", JSON.stringify(buyNowItem));
       } else {
         saveGuestBuyNowItem(buyNowItem);
-        window.sessionStorage.setItem("aura-luxe-checkout-mode", "guest");
       }
+      window.sessionStorage.setItem("aura-luxe-checkout-mode", "buy-now");
       onClose();
-      router.push(user ? "/checkout?mode=buy-now" : "/checkout?mode=guest");
+      router.push("/checkout?mode=buy-now");
     } catch (error) {
       console.error("Error:", error);
       toast.error("Failed to proceed. Please try again.");

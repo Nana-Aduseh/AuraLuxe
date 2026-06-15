@@ -7,7 +7,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}))
     const { reference, token } = body
-    const looksLikeUuid = typeof reference === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(reference)
 
     if (!reference) {
       return NextResponse.json({ error: 'Missing reference' }, { status: 400 })
@@ -19,30 +18,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Supabase admin client not configured' }, { status: 500 })
     }
 
-    // First, check if an order already exists for this payment reference or id
-    const { data: existingByRef, error: refErr } = await supabase
+    // Check if an order already exists for this payment reference
+    const { data: existingOrders, error: refErr } = await supabase
       .from('orders')
       .select('*')
       .eq('payment_reference', reference)
-      .maybeSingle()
 
-    const { data: existingById, error: idErr } = existingByRef || !looksLikeUuid
-      ? { data: null, error: null }
-      : await supabase
-          .from('orders')
-          .select('*')
-          .eq('id', reference)
-          .maybeSingle()
-
-    if (refErr || idErr) {
-      console.error('Order lookup failed:', refErr || idErr)
+    if (refErr) {
+      console.error('Order lookup failed:', refErr)
       return NextResponse.json({ error: 'Order lookup failed' }, { status: 500 })
     }
 
-    const existingOrder = existingByRef || existingById
+    const existingOrder = existingOrders?.[0]
 
-    if (existingOrder && existingOrder.confirmation_status === 'confirmed') {
-      // Already confirmed, return it idempotently
+    if (existingOrder) {
+      // Order already exists, return it idempotently
+      if (existingOrder.confirmation_status === 'confirmed') {
+        const { data: items } = await supabase.from('order_items').select('*').eq('order_id', existingOrder.id)
+        const displayItems = await enrichOrderItemsForDisplay(supabase, items || [])
+        return NextResponse.json({ order: existingOrder, items: displayItems })
+      }
+      
+      // Update existing order with fresh payment verification
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({
+          status: 'processing',
+          confirmation_status: 'not_confirmed',
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingOrder.id)
+
+      if (updateError) {
+        console.error('Order update failed:', updateError)
+        return NextResponse.json({ error: updateError.message }, { status: 500 })
+      }
+
       const { data: items } = await supabase.from('order_items').select('*').eq('order_id', existingOrder.id)
       const displayItems = await enrichOrderItemsForDisplay(supabase, items || [])
       return NextResponse.json({ order: existingOrder, items: displayItems })
@@ -60,34 +72,53 @@ export async function POST(request: NextRequest) {
     const totalAmount = Number(metadata.total_amount ?? Number(payData.amount) / 100)
 
     if (existingOrder) {
-      // Update existing order to confirmed
+      // Update all existing split orders associated with this reference
+      const orderIds = existingOrders.map(o => o.id)
       const { error: updateError } = await supabase
         .from('orders')
         .update({
-          payment_reference: reference,
           status: 'processing',
           confirmation_status: 'not_confirmed',
           completed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .eq('id', existingOrder.id)
+        .in('id', orderIds)
 
       if (updateError) {
         console.error('Order update failed:', updateError)
         return NextResponse.json({ error: updateError.message }, { status: 500 })
       }
 
-      const { data: items } = await supabase.from('order_items').select('*').eq('order_id', existingOrder.id)
-      const { data: freshOrder } = await supabase.from('orders').select('*').eq('id', existingOrder.id).maybeSingle()
+      const { data: items } = await supabase.from('order_items').select('*').in('order_id', orderIds)
+      const { data: freshOrders } = await supabase.from('orders').select('*').in('id', orderIds)
       const displayItems = await enrichOrderItemsForDisplay(supabase, items || [])
-      return NextResponse.json({ order: freshOrder || existingOrder, items: displayItems })
+      const currentTotal = (freshOrders || []).reduce((sum, o) => sum + (o.total_amount || 0), 0)
+      
+      return NextResponse.json({ 
+        order: { ...(freshOrders?.[0] || existingOrder), total_amount: currentTotal }, 
+        items: displayItems 
+      })
     }
 
     if (cartItems.length === 0) {
       return NextResponse.json({ error: 'Missing checkout metadata' }, { status: 400 })
     }
 
+    console.log(`[Orders/Finalize] Processing payment reference: ${reference}`);
+    console.log(`[Orders/Finalize] Cart items count: ${cartItems.length}`);
+    console.log(`[Orders/Finalize] Cart items details:`, cartItems);
+    console.log(`[Orders/Finalize] Guest info:`, metadata.guest_info);
+
     const guestInfo = metadata.guest_info || {}
+
+    // Create ONE order for the entire payment (with multiple order_items inside)
+    console.log(`[Orders/Finalize] Creating single order for all ${cartItems.length} items`, {
+      totalAmount,
+      deliveryType: metadata.delivery_type,
+      guestPhone: guestInfo.phone,
+      guestAddress: guestInfo.address,
+    });
+
     const { data: createdOrder, error: createError } = await supabase
       .from('orders')
       .insert({
@@ -112,13 +143,21 @@ export async function POST(request: NextRequest) {
 
     if (createError || !createdOrder) {
       console.error('Order creation failed:', createError)
-      return NextResponse.json({ error: createError?.message || 'Order creation failed' }, { status: 500 })
+      return NextResponse.json({ error: 'Failed to create order' }, { status: 500 })
     }
+    
+    console.log(`[Orders/Finalize] Order created successfully:`, {
+      orderId: createdOrder.id,
+      totalAmount,
+      itemCount: cartItems.length,
+    });
 
-    // Insert order items and reduce stock only after the payment is verified
+    // Add all cart items as order_items for this single order
     for (const item of cartItems) {
       const quantityOrdered = Number(item.quantity_ordered || 1)
       const priceAtPurchase = Number(item.price_at_purchase || 0)
+
+      console.log(`[Orders/Finalize] Adding order item: product=${item.product_id}, price=${priceAtPurchase}, qty=${quantityOrdered}`);
 
       let { error: itemError } = await supabase.from('order_items').insert({
         order_id: createdOrder.id,
@@ -130,19 +169,12 @@ export async function POST(request: NextRequest) {
       })
 
       if (itemError) {
-        const legacyInsert = await supabase.from('order_items').insert({
-          order_id: createdOrder.id,
-          product_id: item.product_id,
-          color_id: item.color_id || null,
-          quantity_id: item.quantity_id || null,
-          quantity: quantityOrdered,
-          price: priceAtPurchase,
-        })
-        itemError = legacyInsert.error
+        console.error('Order item insert error:', itemError);
+      } else {
+        console.log(`[Orders/Finalize] Order item added to order ${createdOrder.id}: product=${item.product_id}`);
       }
 
-      if (itemError) console.error('Order item insert error:', itemError)
-
+      // Decrement stock for this item
       if (item.color_id) {
         const { data: colorData } = await supabase
           .from('product_colors')
@@ -155,27 +187,25 @@ export async function POST(request: NextRequest) {
             .from('product_colors')
             .update({ stock_quantity: Math.max(0, colorData.stock_quantity - quantityOrdered) })
             .eq('id', item.color_id)
+          console.log(`[Orders/Finalize] Decremented stock for color ${item.color_id} by ${quantityOrdered}`);
         }
       }
     }
 
+    // Fetch all order items for display
     const { data: items } = await supabase.from('order_items').select('*').eq('order_id', createdOrder.id)
     const displayItems = await enrichOrderItemsForDisplay(supabase, items || [])
 
-    // Attempt to auto-claim guest order to a profile if email exists
+    // Auto-claim logic for guest orders
     if (createdOrder.guest_email && !createdOrder.user_id) {
-      try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id, email')
-          .eq('email', createdOrder.guest_email)
-          .maybeSingle()
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', createdOrder.guest_email)
+        .maybeSingle()
 
-        if (profile) {
-          await supabase.from('orders').update({ user_id: profile.id }).eq('id', createdOrder.id)
-        }
-      } catch (claimErr) {
-        console.error('Guest order auto-claim failed:', claimErr)
+      if (profile) {
+        await supabase.from('orders').update({ user_id: profile.id }).eq('id', createdOrder.id)
       }
     }
 

@@ -35,8 +35,15 @@ interface Order {
   confirmation_status: string
   delivery_status: string | null
   order_type: string
+  payment_reference?: string
   items?: OrderItem[]
   order_items?: OrderItem[] // Handle Supabase default join naming
+  guest_phone?: string | null
+  guest_address?: string | null
+  guest_town?: string | null
+  guest_region?: string | null
+  guest_first_name?: string | null
+  guest_last_name?: string | null
 }
 
 export default function OrdersPage() {
@@ -84,7 +91,7 @@ export default function OrdersPage() {
 
         // Find IDs that are NOT in the database results
         const missingIds = [...new Set(localOrderIds)].filter(id => 
-          !allOrders.some(o => o.id === id || o.payment_reference === id)
+          !allOrders.some(o => o.id === id || o.payment_reference === id || o.payment_reference?.startsWith(`${id}-`))
         );
 
         if (missingIds.length > 0) {
@@ -137,7 +144,12 @@ export default function OrdersPage() {
               }
 
               try {
-                const gToken = typeof window !== 'undefined' ? window.sessionStorage.getItem('aura-luxe-guest-order-token') : null;
+                // Look for guest token in all possible session storage keys
+                const gToken = typeof window !== 'undefined' 
+                  ? (window.sessionStorage.getItem('aura-luxe-guest-order-token') || 
+                     window.sessionStorage.getItem('aura-luxe-pending-payment-token'))
+                  : null;
+                  
                 const tokenQuery = gToken ? `?token=${encodeURIComponent(gToken)}` : "";
                 
                 const response = await fetch(
@@ -158,6 +170,7 @@ export default function OrdersPage() {
               return { ...order, items: [] }
             }),
           )
+          
           setOrders(ordersWithItems)
         }
       } catch (ordersError) {
@@ -431,6 +444,42 @@ export default function OrdersPage() {
                         </div>
                       </div>
                     )}
+
+                    {/* Delivery/Pickup Information */}
+                    <div className="border border-blue-200 rounded-lg p-4 bg-blue-50">
+                      <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                        {order.order_type === 'pickup' ? '📍 Pickup Information' : '🚚 Delivery Information'}
+                      </h3>
+                      <div className="space-y-2 text-sm text-gray-700">
+                        {order.guest_phone && (
+                          <p>
+                            <span className="font-medium">Contact Phone:</span> {order.guest_phone}
+                          </p>
+                        )}
+                        {order.order_type === 'delivery' && (
+                          <>
+                            {order.guest_address && (
+                              <p>
+                                <span className="font-medium">Address:</span> {order.guest_address}
+                              </p>
+                            )}
+                            {order.guest_town && (
+                              <p>
+                                <span className="font-medium">Town:</span> {order.guest_town}
+                              </p>
+                            )}
+                            {order.guest_region && (
+                              <p>
+                                <span className="font-medium">Region:</span> {order.guest_region}
+                              </p>
+                            )}
+                          </>
+                        )}
+                        {order.order_type === 'pickup' && !order.guest_phone && (
+                          <p className="text-amber-700 italic">Please provide a contact number for pickup coordination</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

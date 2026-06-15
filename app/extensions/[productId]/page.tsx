@@ -130,9 +130,9 @@ export default function ProductDetailPage() {
 
       setShowAddToCartSuccess(true)
       setQuantity(1)
-    } catch (error) {
-      console.error('Error adding to cart:', error.message || error)
-      toast.error(error.message || 'Failed to add to cart. Please try again.')
+    } catch (error: any) {
+      console.error('Error adding to cart:', error?.message || error)
+      toast.error(error?.message || 'Failed to add to cart. Please try again.')
     } finally {
       setProcessing(false)
     }
@@ -150,6 +150,16 @@ export default function ProductDetailPage() {
 
     setProcessing(true)
     try {
+      console.log(`[Extensions/BuyNow] Creating buy-now item:`, {
+        productId: product.id,
+        productName: product.name,
+        currentPrice: pricing.currentPrice,
+        hasPromo: pricing.hasPromo,
+        originalPrice: pricing.originalPrice,
+        quantity,
+        color: selectedColor,
+      });
+
       const buyNowItem = {
         id: `buy-now-${product.id}-${selectedColor}-${selectedQuantityId || 'null'}`,
         user_id: user?.id || '',
@@ -167,13 +177,14 @@ export default function ProductDetailPage() {
 
       if (user) {
         window.sessionStorage.setItem('aura-luxe-buy-now', JSON.stringify(buyNowItem))
-        window.sessionStorage.setItem('aura-luxe-checkout-mode', 'buy-now')
+        console.log(`[Extensions/BuyNow] Saved to sessionStorage (authenticated user)`);
       } else {
         saveGuestBuyNowItem(buyNowItem)
-        window.sessionStorage.setItem('aura-luxe-checkout-mode', 'guest')
+        console.log(`[Extensions/BuyNow] Saved to guest storage (guest user)`);
       }
+      window.sessionStorage.setItem('aura-luxe-checkout-mode', 'buy-now')
 
-      router.push(user ? '/checkout?mode=buy-now' : '/checkout?mode=guest')
+      router.push('/checkout?mode=buy-now')
     } catch (error) {
       console.error('Error:', error)
       toast.error('Failed to proceed. Please try again.')

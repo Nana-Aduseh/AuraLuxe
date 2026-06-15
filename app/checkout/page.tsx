@@ -134,19 +134,12 @@ export default function CheckoutPage() {
       }
 
       const urlMode = new URLSearchParams(window.location.search).get("mode");
-      const storedMode = window.sessionStorage.getItem(
-        "aura-luxe-checkout-mode",
-      );
       const mode =
         urlMode === "buy-now"
           ? "buy-now"
-          : urlMode === "cart"
-            ? "cart"
-          : urlMode === "guest" || storedMode === "guest"
-            ? "guest"
-            : storedMode === "buy-now"
-              ? "buy-now"
-              : "cart";
+          : urlMode === "guest" || urlMode === "cart"
+            ? urlMode
+            : "cart";
 
       setCheckoutMode(mode);
 
@@ -174,7 +167,7 @@ export default function CheckoutPage() {
         if (restoredState.checkoutChoice === "guest" || restoredState.checkoutChoice === "account") {
           setCheckoutChoice(restoredState.checkoutChoice);
         }
-        if (typeof restoredState.showPayment === "boolean") {
+        if (typeof restoredState.showPayment === "boolean" && !urlMode) {
           setShowPayment(restoredState.showPayment);
         }
       }
@@ -187,10 +180,12 @@ export default function CheckoutPage() {
           const guestBuyNowItem = getGuestBuyNowItem();
 
           if (!guestBuyNowItem) {
+            console.warn("[Checkout] No buy-now item found in sessionStorage or guestStorage, redirecting to cart");
             router.push("/cart");
             return;
           }
 
+          console.log("[Checkout] Using guest buy-now item");
           setCartItems([guestBuyNowItem]);
           setIsGuestFlow(!user);
           setLoading(false);
@@ -199,11 +194,31 @@ export default function CheckoutPage() {
 
         try {
           const parsedItem = JSON.parse(savedBuyNowItem);
+          
+          // Validate that the parsed item has required fields
+          if (!parsedItem.product_id || !parsedItem.product) {
+            throw new Error("Invalid buy-now item structure: missing product_id or product");
+          }
+
+          // Ensure product object has the required fields for pricing
+          if (typeof parsedItem.product !== 'object' || !parsedItem.product.id) {
+            throw new Error("Invalid product in buy-now item");
+          }
+
           setCartItems([parsedItem]);
           setIsGuestFlow(false);
-        } catch {
-          router.push("/cart");
-          return;
+        } catch (err) {
+          console.error("[Checkout] Failed to parse buy-now item:", err);
+          const guestBuyNowItem = getGuestBuyNowItem();
+          if (guestBuyNowItem) {
+            console.log("[Checkout] Falling back to guest buy-now item");
+            setCartItems([guestBuyNowItem]);
+            setIsGuestFlow(true);
+          } else {
+            console.error("[Checkout] No fallback buy-now item available, redirecting to cart");
+            router.push("/cart");
+            return;
+          }
         }
       } else if (mode === "guest") {
         const guestItems = getGuestCartItems();
@@ -294,9 +309,20 @@ export default function CheckoutPage() {
 
   const total = cartItems.reduce((sum, item) => {
     const product = item.product || {};
-    return (
-      sum + getEffectiveProductPrice(item.product) * (item.quantity_ordered || 1)
-    );
+    const price = getEffectiveProductPrice(item.product);
+    const quantity = item.quantity_ordered || 1;
+    const itemTotal = price * quantity;
+    
+    if (price === 0) {
+      console.warn(`[Checkout] Item ${item.product_id} has zero price calculation`, {
+        product,
+        quantity,
+      });
+    } else {
+      console.log(`[Checkout] Item ${item.product_id}: ${price} x ${quantity} = ${itemTotal}`);
+    }
+    
+    return sum + itemTotal;
   }, 0);
 
   const formatPhoneNumber = (value: string) => {
@@ -391,17 +417,16 @@ export default function CheckoutPage() {
         price_at_purchase: getEffectiveProductPrice(item.product),
       }));
 
-      const guestInfo = user
-        ? null
-        : {
-            firstName,
-            lastName,
-            email,
-            phone,
-            address,
-            town,
-            region,
-          };
+      // Capture delivery info for BOTH authenticated and guest users
+      const guestInfo = {
+        firstName: firstName || (user?.user_metadata?.full_name?.split(" ")?.[0] || ""),
+        lastName: lastName || (user?.user_metadata?.full_name?.split(" ")?.slice(1).join(" ") || ""),
+        email: email || user?.email || "",
+        phone,
+        address,
+        town,
+        region,
+      };
 
       try {
         window.sessionStorage.setItem(

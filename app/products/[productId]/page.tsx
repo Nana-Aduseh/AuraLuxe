@@ -131,6 +131,15 @@ export default function HairProductDetailPage() {
 
     setProcessing(true)
     try {
+      console.log(`[Products/BuyNow] Creating buy-now item:`, {
+        productId: product.id,
+        productName: product.name,
+        currentPrice: pricing.currentPrice,
+        hasPromo: pricing.hasPromo,
+        originalPrice: pricing.originalPrice,
+        quantity,
+      });
+
       const buyNowItem = {
         id: `buy-now-${product.id}-${defaultColor.id}-${selectedQuantityId || 'null'}`,
         user_id: user?.id || '',
@@ -148,13 +157,14 @@ export default function HairProductDetailPage() {
 
       if (user) {
         window.sessionStorage.setItem('aura-luxe-buy-now', JSON.stringify(buyNowItem))
-        window.sessionStorage.setItem('aura-luxe-checkout-mode', 'buy-now')
+        console.log(`[Products/BuyNow] Saved to sessionStorage (authenticated user)`);
       } else {
         saveGuestBuyNowItem(buyNowItem)
-        window.sessionStorage.setItem('aura-luxe-checkout-mode', 'guest')
+        console.log(`[Products/BuyNow] Saved to guest storage (guest user)`);
       }
+      window.sessionStorage.setItem('aura-luxe-checkout-mode', 'buy-now')
 
-      router.push(user ? '/checkout?mode=buy-now' : '/checkout?mode=guest')
+      router.push('/checkout?mode=buy-now')
     } catch (error) {
       console.error('Error:', error)
       toast.error('Failed to proceed. Please try again.')
@@ -281,7 +291,7 @@ export default function HairProductDetailPage() {
       <AddToCartSuccessModal
         isOpen={showAddToCartSuccess}
         productName={product?.name || ''}
-        productImage={product?.image_url}
+        productImage={product?.image_url ?? undefined}
         quantity={quantity}
         onClose={() => setShowAddToCartSuccess(false)}
       />

@@ -19,6 +19,7 @@ export interface Product {
 
 export function getEffectiveProductPrice(product?: Product | null) {
   if (!product) {
+    console.warn("[Pricing] getEffectiveProductPrice called with null/undefined product");
     return 0;
   }
 
@@ -27,10 +28,16 @@ export function getEffectiveProductPrice(product?: Product | null) {
     typeof product.discounted_price === "number" &&
     product.discounted_price > 0
   ) {
+    console.log(`[Pricing] Using discounted price for product ${product.id}: ${product.discounted_price} (original: ${product.price})`);
     return product.discounted_price;
   }
 
-  return product.price || 0;
+  const basePrice = product.price || 0;
+  if (basePrice === 0 && !product.price) {
+    console.warn(`[Pricing] Product ${product.id} has no valid price (price=${product.price})`);
+  }
+  
+  return basePrice;
 }
 
 export function slugifyProductName(name: string) {
@@ -96,7 +103,7 @@ export interface CartItem {
   user_id: string;
   product_id: string;
   color_id: string;
-  quantity_id: string;
+  quantity_id?: string | null;
   quantity_ordered: number;
   product?: Product;
   color?: ProductColor;
@@ -313,6 +320,12 @@ export async function addToCart(
 export async function removeFromCart(cartItemId: string) {
   const supabase = createClient();
   return await supabase.from("cart_items").delete().eq("id", cartItemId);
+}
+
+// Clear all cart items for a user
+export async function clearCart(userId: string) {
+  const supabase = createClient();
+  return await supabase.from("cart_items").delete().eq("user_id", userId);
 }
 
 // Update cart item quantity

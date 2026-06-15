@@ -10,12 +10,7 @@ type OrderItemRow = {
 }
 
 type SupabaseLike = {
-  from: (table: string) => {
-    select: (columns: string) => any
-    eq: (column: string, value: string) => any
-    maybeSingle: () => Promise<{ data: any; error: any }>
-    single: () => Promise<{ data: any; error: any }>
-  }
+  from: (table: string) => any
 }
 
 export async function enrichOrderItemsForDisplay(

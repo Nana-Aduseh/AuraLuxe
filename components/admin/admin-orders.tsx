@@ -18,6 +18,12 @@ interface OrderWithDetails {
   user_name?: string;
   user_email?: string;
   order_items?: OrderItem[];
+  guest_phone?: string | null;
+  guest_address?: string | null;
+  guest_town?: string | null;
+  guest_region?: string | null;
+  guest_first_name?: string | null;
+  guest_last_name?: string | null;
 }
 
 interface OrderItem {
@@ -464,6 +470,42 @@ export default function AdminOrders({ searchQuery = "" }: AdminOrdersProps) {
                               <p className="text-sm text-orange-600 p-2 bg-orange-50 rounded">
                                 No items found for this order
                               </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Delivery Information */}
+                        <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                          <h4 className="font-semibold text-gray-900 mb-2">
+                            {order.order_type === "pickup" ? "Pickup Information" : "Delivery Information"}
+                          </h4>
+                          <div className="space-y-1 text-sm text-gray-700">
+                            {order.guest_phone && (
+                              <p>
+                                <span className="font-medium">Phone:</span> {order.guest_phone}
+                              </p>
+                            )}
+                            {order.order_type === "delivery" && (
+                              <>
+                                {order.guest_address && (
+                                  <p>
+                                    <span className="font-medium">Address:</span> {order.guest_address}
+                                  </p>
+                                )}
+                                {order.guest_town && (
+                                  <p>
+                                    <span className="font-medium">Town:</span> {order.guest_town}
+                                  </p>
+                                )}
+                                {order.guest_region && (
+                                  <p>
+                                    <span className="font-medium">Region:</span> {order.guest_region}
+                                  </p>
+                                )}
+                              </>
+                            )}
+                            {order.order_type === "pickup" && (
+                              <p className="text-amber-700 italic">Customer will pick up their order</p>
                             )}
                           </div>
                         </div>

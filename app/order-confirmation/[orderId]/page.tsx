@@ -8,6 +8,9 @@ import { Printer } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { persistGuestOrderContext } from "@/lib/guest-orders";
+import { clearGuestCartItems } from "@/lib/guest-cart";
+import { clearCart } from "@/lib/api";
+import { createClient } from "@/lib/supabase/client";
 import WhatsAppButton from "@/components/whatsapp-button";
 
 export default function OrderConfirmationPage() {
@@ -86,6 +89,7 @@ export default function OrderConfirmationPage() {
               if (!finalizeStarted) {
                 finalizeStarted = true;
                 try {
+                  console.log(`[OrderConfirmation] Calling finalize endpoint for reference: ${payData.reference}`);
                   const finalizeRes = await fetch("/api/orders/finalize", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -93,8 +97,16 @@ export default function OrderConfirmationPage() {
                   });
 
                   if (finalizeRes.ok) {
+                    console.log(`[OrderConfirmation] Finalize call succeeded`);
+
                     const finalized = await finalizeRes.json();
                     if (finalized.order) {
+                      console.log(`[OrderConfirmation] Order finalized:`, {
+                        orderId: finalized.order.id,
+                        confirmationStatus: finalized.order.confirmation_status,
+                        totalAmount: finalized.order.total_amount,
+                        itemsCount: Array.isArray(finalized.items) ? finalized.items.length : 0,
+                      });
                       setOrder(finalized.order);
                       setOrderItems(Array.isArray(finalized.items) ? finalized.items : (Array.isArray(payload.items) ? payload.items : cartItems));
                       persistGuestOrderContext({
@@ -102,6 +114,21 @@ export default function OrderConfirmationPage() {
                         token: finalized.order.guest_access_token || currentToken,
                         email: finalized.order.guest_email || null,
                       });
+                      
+                      // Clear cart after successful order finalization
+                      console.log(`[OrderConfirmation] Clearing cart items after order finalization`);
+                      if (finalized.order.user_id) {
+                        // Authenticated user - clear from database
+                        await clearCart(finalized.order.user_id).catch(() => null);
+                      } else {
+                        // Guest user - clear from localStorage
+                        clearGuestCartItems();
+                      }
+                      window.sessionStorage.removeItem("aura-luxe-checkout-state-v2");
+                      
+                      // Notify header component to update cart counter
+                      window.dispatchEvent(new Event("aura-luxe-cart-updated"));
+                      
                       // If fully confirmed now, we can stop polling
                       if (finalized.order.confirmation_status === "confirmed") return;
                     }

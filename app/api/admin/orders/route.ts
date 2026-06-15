@@ -93,6 +93,13 @@ export async function GET() {
         user_name: profile?.name || "Unknown",
         user_email: profile?.email || "Unknown",
         order_items: orderItems,
+        // Include delivery information
+        guest_phone: order.guest_phone || null,
+        guest_address: order.guest_address || null,
+        guest_town: order.guest_town || null,
+        guest_region: order.guest_region || null,
+        guest_first_name: order.guest_first_name || null,
+        guest_last_name: order.guest_last_name || null,
       };
     }),
   );
