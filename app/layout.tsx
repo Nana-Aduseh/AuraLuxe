@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   },
 }
 
-const salesStartDate = '2026-06-15T00:00:00Z'; // June 15, 2026, 00:00:00 GMT
+const salesStartDate = '2026-06-15T00:23:00Z'; // June 15, 2026, 00:00:00 GMT
 
 export default function RootLayout({
   children,
