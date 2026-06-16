@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyPaystackWebhookSignature } from '@/lib/paystack'
+import { verifyPaystackWebhookSignature, verifyPaystackTransaction } from '@/lib/paystack'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function POST(request: NextRequest) {
@@ -29,12 +29,10 @@ export async function POST(request: NextRequest) {
     }
 
     const event = JSON.parse(rawBody)
-    const { event: eventType, data } = event
+    const { event: eventType, data: eventData } = event
 
     console.log('[Webhook] Event type:', eventType);
-    console.log('[Webhook] Reference:', data?.reference);
-    console.log('[Webhook] Status:', data?.status);
-    console.log('[Webhook] Amount:', data?.amount, 'kobo');
+    console.log('[Webhook] Event Reference:', eventData?.reference);
 
     // Only handle successful transactions
     if (eventType !== 'charge.success') {
@@ -42,8 +40,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'Event ignored' })
     }
 
-    const { reference, amount, status, metadata: rawMetadata } = data
-    
+    const paystackReferenceFromEvent = eventData?.reference;
+    if (!paystackReferenceFromEvent) {
+        console.error('[Webhook] ❌ FAILED: Event data is missing a reference.');
+        return NextResponse.json({ error: 'Event missing reference' }, { status: 400 });
+    }
+
+    console.log('[Webhook] Verifying transaction with Paystack API to ensure complete metadata:', paystackReferenceFromEvent);
+    const verification = await verifyPaystackTransaction(paystackReferenceFromEvent);
+    if (!verification || !verification.status || !verification.data) {
+        console.error('[Webhook] ❌ FAILED: Paystack transaction verification failed for reference:', paystackReferenceFromEvent);
+        return NextResponse.json({ success: true, message: 'Transaction verification failed' });
+    }
+
+    const { data } = verification;
+    const { reference, amount, status, metadata: rawMetadata } = data;
+
     // Parse metadata safely in case Paystack stringifies it
     let metadata = rawMetadata || {};
     if (typeof metadata === 'string') {
@@ -59,7 +71,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'Transaction not successful' })
     }
 
-    console.log('[Webhook] Processing successful transaction:', {
+    console.log('[Webhook] Processing verified transaction:', {
       paystackReference: reference,
       checkoutReference: paymentReference,
     });
@@ -67,7 +79,10 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient()
     if (!supabase) return NextResponse.json({ error: 'Supabase missing' }, { status: 500 })
 
-    // Check if order already exists for this reference (prevents duplicates)
+    // ---------------------------------------------------------------------------------
+    // IDEMPOTENCY CHECK: Check if order already exists for this reference.
+    // If the /api/orders/finalize redirect already created it, we gracefully exit.
+    // ---------------------------------------------------------------------------------
     const { data: existingOrders } = await supabase
       .from('orders')
       .select('id')
@@ -75,8 +90,12 @@ export async function POST(request: NextRequest) {
       .limit(1)
 
     if (existingOrders && existingOrders.length > 0) {
+      console.log('[Webhook] ⏭️ Order already exists (likely created by /finalize route). Acknowledging webhook.');
+      console.log('[Webhook] ==============================================');
       return NextResponse.json({ success: true, message: 'Order already exists' })
     }
+
+    console.log('[Webhook] Order not found. Creating order as fallback...');
 
     // Extract data from Paystack payload
     const cartItems = Array.isArray(metadata?.cart_items) ? metadata.cart_items : []
@@ -84,6 +103,7 @@ export async function POST(request: NextRequest) {
     const totalAmount = Number(metadata?.total_amount ?? Number(amount) / 100)
 
     if (!cartItems.length) {
+      console.error('[Webhook] ❌ No cart items in verified metadata. Cannot create order.');
       return NextResponse.json({ success: true, message: 'No cart items' })
     }
 
@@ -91,8 +111,6 @@ export async function POST(request: NextRequest) {
       paymentReference,
       itemCount: cartItems.length,
       totalAmount,
-      guestPhone: guestInfo.phone,
-      guestAddress: guestInfo.address,
     });
 
     // Create ONE order for the entire payment
@@ -129,8 +147,6 @@ export async function POST(request: NextRequest) {
     for (const item of cartItems) {
       const qty = Number(item.quantity_ordered || 1)
       const price = Number(item.price_at_purchase || 0)
-
-      console.log('[Webhook] Adding order item:', { productId: item.product_id, qty, price });
 
       const { error: itemError } = await supabase.from('order_items').insert({
         order_id: createdOrder.id,
@@ -176,9 +192,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log('[Webhook] ✅ Successfully processed order:', paymentReference)
+    console.log('[Webhook] ✅ Successfully processed fallback order:', paymentReference)
     console.log('[Webhook] ==============================================');
-    return NextResponse.json({ success: true, message: 'Order processed successfully' })
+    return NextResponse.json({ success: true, message: 'Order processed successfully via webhook fallback' })
   } catch (err: any) {
     console.error('[Webhook] ❌ Fatal error:', {
       error: err.message,

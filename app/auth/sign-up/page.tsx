@@ -25,6 +25,8 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showRepeatPassword, setShowRepeatPassword] = useState(false)
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -123,25 +125,47 @@ export default function Page() {
                     {/* Password Field */}
                     <div className="grid gap-2">
                       <Label htmlFor="password">Password</Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                      />
+                      <div className="relative">
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          required
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                        >
+                          {showPassword ? "🙈" : "👁️"}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Repeat Password Field */}
                     <div className="grid gap-2">
                       <Label htmlFor="repeat-password">Repeat Password</Label>
-                      <Input
-                        id="repeat-password"
-                        type="password"
-                        required
-                        value={repeatPassword}
-                        onChange={(e) => setRepeatPassword(e.target.value)}
-                      />
+                      <div className="relative">
+                        <Input
+                          id="repeat-password"
+                          type={showRepeatPassword ? "text" : "password"}
+                          required
+                          value={repeatPassword}
+                          onChange={(e) => setRepeatPassword(e.target.value)}
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowRepeatPassword(!showRepeatPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                          aria-label={showRepeatPassword ? "Hide password" : "Show password"}
+                        >
+                          {showRepeatPassword ? "🙈" : "👁️"}
+                        </button>
+                      </div>
                     </div>
 
                     {error && <p className="text-sm text-red-500">{error}</p>}
