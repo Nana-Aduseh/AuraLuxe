@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     let hasMore = true
 
     while (hasMore) {
-      const response = await fetch(`https://api.paystack.co/transaction?status=success&perPage=100&page=${page}&from=${fromDate}`, {
+      const response = await fetch(`https://api.paystack.co/transaction?status=success&perPage=50&page=${page}&from=${fromDate}`, {
         headers: {
           Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
           'Content-Type': 'application/json'
@@ -35,10 +35,11 @@ export async function GET(request: Request) {
       const transactions = paystackData.data || []
       allTransactions = allTransactions.concat(transactions)
 
-      if (transactions.length < 100) {
-        hasMore = false // We reached the last page!
+      const meta = paystackData.meta
+      if (meta && meta.page < meta.pageCount) {
+        page++ // There are more pages, keep going!
       } else {
-        page++ // There are more than 100, fetch the next page!
+        hasMore = false // We reached the last page!
       }
     }
 
@@ -58,12 +59,19 @@ export async function GET(request: Request) {
     const referencesToCheck = transactionsToCheck.map((tx: any) => tx.paymentReference)
 
     // 3. Query Supabase to see which of these references already exist
-    const { data: existingOrders, error: dbError } = await supabase
-      .from('orders')
-      .select('id, payment_reference, completed_at')
-      .in('payment_reference', referencesToCheck)
+    // CHUNKED to prevent the database URL from getting too long when fetching 30 days of data
+    let existingOrders: any[] = []
+    const chunkSize = 50
+    for (let i = 0; i < referencesToCheck.length; i += chunkSize) {
+      const chunk = referencesToCheck.slice(i, i + chunkSize)
+      const { data, error: dbError } = await supabase
+        .from('orders')
+        .select('id, payment_reference, completed_at, created_at')
+        .in('payment_reference', chunk)
 
-    if (dbError) throw dbError
+      if (dbError) throw dbError
+      if (data) existingOrders.push(...data)
+    }
 
     const existingOrdersMap = new Map(existingOrders?.map(o => [o.payment_reference, o]) || [])
     
@@ -104,17 +112,27 @@ export async function GET(request: Request) {
 
     // 4. Recover the missing orders!
     for (const tx of missingTransactions) {
-      // Call our verify method to ensure we get the fully un-truncated metadata
-      const verify = await verifyPaystackTransaction(tx.reference)
-      if (!verify?.data) continue
+      let payData = tx
+      let metadata = tx.parsedMetadata || {}
+      let cartItems = Array.isArray(metadata.cart_items) ? metadata.cart_items : []
 
-      const payData = verify.data
-      let metadata = payData.metadata || {}
-      if (typeof metadata === 'string') {
-        try { metadata = JSON.parse(metadata) } catch (e) {}
+      // We ONLY call verify if cart_items is empty (to prevent hitting Paystack API rate limits!)
+      if (cartItems.length === 0) {
+        console.log(`[Paystack Sync] Fetching full details for ${tx.reference}...`)
+        const verify = await verifyPaystackTransaction(tx.reference)
+        if (verify?.data) {
+          payData = verify.data
+          let vMeta = payData.metadata || {}
+          if (typeof vMeta === 'string') {
+            try { vMeta = JSON.parse(vMeta) } catch (e) {}
+          }
+          metadata = vMeta
+          cartItems = Array.isArray(metadata.cart_items) ? metadata.cart_items : []
+        }
+        // Small delay so Paystack doesn't block us for making too many requests
+        await new Promise(resolve => setTimeout(resolve, 500))
       }
 
-      const cartItems = Array.isArray(metadata.cart_items) ? metadata.cart_items : []
       // We removed the 'continue' here! If Paystack drops the metadata, 
       // we STILL want to create the order so you can see it and contact the customer.
 
@@ -144,11 +162,14 @@ export async function GET(request: Request) {
         .select('*')
         .single()
 
-      if (createError || !createdOrder) continue
+      if (createError || !createdOrder) {
+        console.error(`[Paystack Sync] ❌ Failed to create order for reference ${tx.paymentReference}:`, createError)
+        continue
+      }
 
       // Add all cart items
       for (const item of cartItems) {
-        await supabase.from('order_items').insert({
+        const { error: itemError } = await supabase.from('order_items').insert({
           order_id: createdOrder.id,
           product_id: item.product_id,
           color_id: item.color_id || null,
@@ -156,6 +177,10 @@ export async function GET(request: Request) {
           quantity_ordered: Number(item.quantity_ordered || 1),
           price_at_purchase: Number(item.price_at_purchase || 0),
         })
+
+        if (itemError) {
+          console.error(`[Paystack Sync] ❌ Failed to add item to order ${createdOrder.id}:`, itemError)
+        }
       }
       
       // Auto-claim logic for guest orders
