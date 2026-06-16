@@ -115,6 +115,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     updatePayload.delivery_status = delivery_status || null
   }
 
+  // Fetch existing order to check current status before updating
+  const { data: existingOrder } = await dataClient
+    .from('orders')
+    .select('delivery_status')
+    .eq('id', orderId)
+    .single()
+
   const { data: updatedOrder, error: updateError } = await dataClient
     .from('orders')
     .update(updatePayload)
@@ -124,6 +131,35 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   if (updateError || !updatedOrder) {
     return NextResponse.json({ error: updateError?.message || 'Failed to update order' }, { status: 500 })
+  }
+
+  // Deduct stock if the status is changing to 'sent' for the first time
+  if (existingOrder?.delivery_status !== 'sent' && updatePayload.delivery_status === 'sent') {
+    const { data: orderItems, error: itemsError } = await dataClient
+      .from('order_items')
+      .select('product_id, color_id, quantity_ordered')
+      .eq('order_id', orderId)
+
+    if (!itemsError && orderItems) {
+      for (const item of orderItems) {
+        if (item.color_id) {
+          const { data: colorData } = await dataClient
+            .from('product_colors')
+            .select('stock_quantity')
+            .eq('id', item.color_id)
+            .maybeSingle()
+
+          if (colorData && typeof colorData.stock_quantity === 'number') {
+            await dataClient
+              .from('product_colors')
+              .update({ stock_quantity: Math.max(0, colorData.stock_quantity - (item.quantity_ordered || 1)) })
+              .eq('id', item.color_id)
+            
+            console.log(`[Admin] Decremented stock for color ${item.color_id} by ${item.quantity_ordered}`)
+          }
+        }
+      }
+    }
   }
 
   const { order, profile, orderItems } = await loadOrderDetails(dataClient as any, orderId)

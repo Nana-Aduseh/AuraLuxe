@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { formatPrice } from "@/lib/currency";
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
 
 interface OrderWithDetails {
   id: string;
@@ -47,6 +49,7 @@ export default function AdminOrders({ searchQuery = "" }: AdminOrdersProps) {
     "all" | "pending" | "confirmed" | "shipped"
   >("all");
   const [dateSort, setDateSort] = useState<"newest" | "oldest">("newest");
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     loadOrders();
@@ -84,11 +87,12 @@ export default function AdminOrders({ searchQuery = "" }: AdminOrdersProps) {
         return;
       }
 
-      const data = payload.orders as OrderWithDetails[];
+      // Robust fallback to safely extract the array regardless of the API response shape
+      const data = (payload.orders || payload.data || (Array.isArray(payload) ? payload : [])) as OrderWithDetails[];
 
       console.log("Orders loaded:", data);
 
-      if (data) {
+      if (data && Array.isArray(data)) {
         setOrders(data);
       }
     } catch (err) {
@@ -131,6 +135,27 @@ export default function AdminOrders({ searchQuery = "" }: AdminOrdersProps) {
     }
   };
 
+  const handleSyncPaystack = async () => {
+    setIsSyncing(true);
+    try {
+      const response = await fetch("/api/admin/sync-paystack", { cache: "no-store" });
+      const data = await response.json();
+      
+      if (!response.ok) throw new Error(data.error || "Sync failed");
+      
+      if (data.recovered > 0 || data.updatedTimestamps > 0) {
+        alert(`⚠️ Sync complete! Recovered ${data.recovered} missing order(s) and fixed ${data.updatedTimestamps || 0} incorrect timestamp(s).`);
+        loadOrders(); // Instantly refresh the table to show the new orders
+      } else {
+        alert("✅ All synced! No missing orders or wrong timestamps found.");
+      }
+    } catch (err: any) {
+      alert(`❌ Error syncing with Paystack: ${err.message}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const filteredOrders = orders.filter((order) => {
     if (filterTab === "all") return true;
     if (filterTab === "pending")
@@ -170,8 +195,8 @@ export default function AdminOrders({ searchQuery = "" }: AdminOrdersProps) {
   });
 
   const visibleOrders = [...searchedOrders].sort((a, b) => {
-    const aTime = new Date(a.created_at).getTime();
-    const bTime = new Date(b.created_at).getTime();
+    const aTime = new Date(a.completed_at || a.created_at).getTime();
+    const bTime = new Date(b.completed_at || b.created_at).getTime();
 
     return dateSort === "newest" ? bTime - aTime : aTime - bTime;
   });
@@ -179,7 +204,7 @@ export default function AdminOrders({ searchQuery = "" }: AdminOrdersProps) {
   const groupedOrders = visibleOrders.reduce<
     Array<{ dateLabel: string; orders: OrderWithDetails[] }>
   >((groups, order) => {
-    const orderDate = format(new Date(order.created_at), "EEEE do MMMM yyyy");
+    const orderDate = format(new Date(order.completed_at || order.created_at), "EEEE do MMMM yyyy");
     const lastGroup = groups[groups.length - 1];
 
     if (lastGroup && lastGroup.dateLabel === orderDate) {
@@ -201,7 +226,18 @@ export default function AdminOrders({ searchQuery = "" }: AdminOrdersProps) {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Orders</h2>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Orders</h2>
+        
+        <Button 
+          onClick={handleSyncPaystack} 
+          disabled={isSyncing}
+          className="bg-amber-600 hover:bg-amber-700 text-white"
+        >
+          <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
+          {isSyncing ? "Syncing with Paystack..." : "Sync Paystack Orders"}
+        </Button>
+      </div>
 
       <div className="flex items-center gap-3 mb-4">
         <label className="text-sm font-medium text-gray-700">
@@ -323,7 +359,7 @@ export default function AdminOrders({ searchQuery = "" }: AdminOrdersProps) {
                               Order: {order.id.slice(0, 8).toUpperCase()}
                             </p>
                             <p className="text-sm text-gray-600">
-                              {new Date(order.created_at).toLocaleDateString()}
+                            {format(new Date(order.completed_at || order.created_at), "MMM d, yyyy, h:mm a")}
                             </p>
                           </div>
                           <div className="hidden md:block">

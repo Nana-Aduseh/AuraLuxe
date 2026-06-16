@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
         payment_reference: paymentReference,
         order_type: metadata?.delivery_type === 'pickup' ? 'pickup' : 'delivery',
         confirmation_status: 'confirmed',
-        completed_at: new Date().toISOString(),
+        completed_at: data?.paidAt || data?.paid_at || data?.transaction_date || data?.createdAt || data?.created_at || new Date().toISOString(),
         guest_access_token: metadata?.guest_token || null,
         guest_first_name: guestInfo.firstName || null,
         guest_last_name: guestInfo.lastName || null,
@@ -160,22 +160,6 @@ export async function POST(request: NextRequest) {
       if (itemError) {
         console.error('Webhook: Order item insert error:', itemError)
         continue
-      }
-
-      // Decrement stock for this item
-      if (item.color_id) {
-        const { data: colorData } = await supabase
-          .from('product_colors')
-          .select('stock_quantity')
-          .eq('id', item.color_id)
-          .maybeSingle()
-
-        if (colorData && typeof colorData.stock_quantity === 'number') {
-          await supabase
-            .from('product_colors')
-            .update({ stock_quantity: Math.max(0, colorData.stock_quantity - qty) })
-            .eq('id', item.color_id)
-        }
       }
     }
 

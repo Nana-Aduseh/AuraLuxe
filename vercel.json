@@ -2,5 +2,11 @@
   "buildCommand": "pnpm run build",
   "devCommand": "pnpm dev",
   "installCommand": "pnpm install --frozen-lockfile",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/admin/sync-paystack",
+      "schedule": "0 * * * *"
+    }
+  ]
 }

@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
         payment_reference: reference,
         order_type: deliveryType === 'pickup' ? 'pickup' : 'delivery',
         confirmation_status: forceFallback && fallbackConfirmation ? fallbackConfirmation : 'confirmed',
-        completed_at: new Date().toISOString(),
+        completed_at: payData?.paidAt || payData?.paid_at || payData?.transaction_date || payData?.createdAt || payData?.created_at || new Date().toISOString(),
         guest_access_token: metadata?.guest_token || token || null,
         guest_first_name: guestInfo.firstName || null,
         guest_last_name: guestInfo.lastName || null,
@@ -183,23 +183,6 @@ export async function POST(request: NextRequest) {
         console.error('Order item insert error:', itemError);
       } else {
         console.log(`[Orders/Finalize] Order item added: product=${item.product_id}`);
-      }
-
-      // Decrement stock for this item
-      if (item.color_id && !(forceFallback && fallbackStatus === 'cancelled')) {
-        const { data: colorData } = await supabase
-          .from('product_colors')
-          .select('stock_quantity')
-          .eq('id', item.color_id)
-          .maybeSingle()
-
-        if (colorData && typeof colorData.stock_quantity === 'number') {
-          await supabase
-            .from('product_colors')
-            .update({ stock_quantity: Math.max(0, colorData.stock_quantity - quantityOrdered) })
-            .eq('id', item.color_id)
-          console.log(`[Orders/Finalize] Decremented stock for color ${item.color_id} by ${quantityOrdered}`);
-        }
       }
     }
 
