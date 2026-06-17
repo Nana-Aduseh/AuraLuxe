@@ -102,11 +102,6 @@ export async function POST(request: NextRequest) {
     const guestInfo = metadata?.guest_info || {}
     const totalAmount = Number(metadata?.total_amount ?? Number(amount) / 100)
 
-    if (!cartItems.length) {
-      console.error('[Webhook] ❌ No cart items in verified metadata. Cannot create order.');
-      return NextResponse.json({ success: true, message: 'No cart items' })
-    }
-
     console.log('[Webhook] Creating single order for payment:', {
       paymentReference,
       itemCount: cartItems.length,
@@ -125,10 +120,6 @@ export async function POST(request: NextRequest) {
         confirmation_status: 'confirmed',
         completed_at: data?.paidAt || data?.paid_at || data?.transaction_date || data?.createdAt || data?.created_at || new Date().toISOString(),
         guest_access_token: metadata?.guest_token || null,
-        guest_first_name: guestInfo.firstName || null,
-        guest_last_name: guestInfo.lastName || null,
-        guest_email: guestInfo.email || null,
-        guest_phone: guestInfo.phone || null,
         guest_first_name: guestInfo.firstName || data?.customer?.first_name || null,
         guest_last_name: guestInfo.lastName || data?.customer?.last_name || null,
         guest_email: guestInfo.email || data?.customer?.email || null,
