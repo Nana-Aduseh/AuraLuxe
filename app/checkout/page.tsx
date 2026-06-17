@@ -329,34 +329,9 @@ export default function CheckoutPage() {
     return sum + itemTotal;
   }, 0);
 
-  const formatPhoneNumber = (value: string) => {
-    const digitsOnly = value.replace(/\D/g, "");
-    if (!digitsOnly) {
-      return "";
-    }
-
-    let localDigits = digitsOnly;
-
-    if (localDigits.startsWith("233")) {
-      localDigits = localDigits.slice(3);
-    }
-
-    if (localDigits.startsWith("0")) {
-      localDigits = localDigits.slice(1);
-    }
-
-    localDigits = localDigits.slice(0, 9);
-
-    if (!localDigits) {
-      return "";
-    }
-
-    return `+233${localDigits}`;
-  };
-
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatPhoneNumber(e.target.value);
-    setPhone(formatted);
+    const digitsOnly = e.target.value.replace(/\D/g, "");
+    setPhone(digitsOnly);
   };
 
   const handleSubmitShipping = async (e: React.FormEvent) => {
@@ -367,6 +342,12 @@ export default function CheckoutPage() {
     }
     if (!phone) {
       alert("Please enter a phone number");
+      return;
+    }
+
+    const phoneRegex = /^(0\d{9}|233\d{9})$/;
+    if (!phoneRegex.test(phone)) {
+      alert("Phone number must be exactly 10 digits (e.g., 0244000000) or 12 digits starting with 233 (e.g., 233244000000)");
       return;
     }
 
@@ -741,8 +722,10 @@ export default function CheckoutPage() {
                         type="tel"
                         value={phone}
                         onChange={handlePhoneChange}
-                        placeholder="+233240000000"
-                        maxLength={13}
+                        placeholder="0244000000 or 233244000000"
+                        pattern="^(0\d{9}|233\d{9})$"
+                        title="Phone number must be exactly 10 digits (e.g., 0244000000) or 12 digits starting with 233"
+                        maxLength={12}
                         required
                       />
                     </div>
