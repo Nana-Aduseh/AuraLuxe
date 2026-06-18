@@ -169,17 +169,36 @@ export async function GET(request: Request) {
 
       // Add all cart items
       for (const item of cartItems) {
+        const qty = Number(item.quantity_ordered || 1)
+        
         const { error: itemError } = await supabase.from('order_items').insert({
           order_id: createdOrder.id,
           product_id: item.product_id,
           color_id: item.color_id || null,
           quantity_id: item.quantity_id || null,
-          quantity_ordered: Number(item.quantity_ordered || 1),
+          quantity_ordered: qty,
           price_at_purchase: Number(item.price_at_purchase || 0),
         })
 
         if (itemError) {
           console.error(`[Paystack Sync] ❌ Failed to add item to order ${createdOrder.id}:`, itemError)
+          continue
+        }
+        
+        // Immediately deduct stock since the order is paid
+        if (item.color_id) {
+          const { data: colorData } = await supabase
+            .from('product_colors')
+            .select('stock_quantity')
+            .eq('id', item.color_id)
+            .maybeSingle()
+
+          if (colorData && typeof colorData.stock_quantity === 'number') {
+            await supabase
+              .from('product_colors')
+              .update({ stock_quantity: Math.max(0, colorData.stock_quantity - qty) })
+              .eq('id', item.color_id)
+          }
         }
       }
       

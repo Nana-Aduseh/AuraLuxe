@@ -50,6 +50,10 @@ export default function AdminOrders({ searchQuery = "" }: AdminOrdersProps) {
   >("all");
   const [dateSort, setDateSort] = useState<"newest" | "oldest">("newest");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState("");
+  const [exportEndDate, setExportEndDate] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
 
   useEffect(() => {
     loadOrders();
@@ -135,6 +139,53 @@ export default function AdminOrders({ searchQuery = "" }: AdminOrdersProps) {
     }
   };
 
+  const handleBulkDeliveryUpdate = async (ordersToUpdate: OrderWithDetails[], newStatus: string) => {
+    const validOrders = ordersToUpdate.filter((order) => {
+      if (newStatus === "sent") {
+        return order.confirmation_status === "confirmed" && !order.delivery_status;
+      }
+      if (newStatus === "received") {
+        return order.delivery_status === "sent";
+      }
+      return false;
+    });
+
+    if (validOrders.length === 0) {
+      alert(`No eligible orders to mark as ${newStatus} for this day.`);
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to mark ${validOrders.length} order(s) as ${newStatus}?`)) {
+      return;
+    }
+
+    setIsBulkUpdating(true);
+    let successCount = 0;
+    try {
+      await Promise.all(
+        validOrders.map(async (order) => {
+          const response = await fetch(`/api/admin/orders/${order.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ delivery_status: newStatus }),
+          });
+          if (response.ok) {
+            updateOrderState(order.id, { delivery_status: newStatus });
+            successCount++;
+          }
+        })
+      );
+      if (successCount < validOrders.length) {
+        alert(`Partially completed: ${successCount}/${validOrders.length} updated successfully.`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("An error occurred during bulk update.");
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  };
+
   const handleSyncPaystack = async () => {
     setIsSyncing(true);
     try {
@@ -154,6 +205,18 @@ export default function AdminOrders({ searchQuery = "" }: AdminOrdersProps) {
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  const handleExportCsv = () => {
+    setIsExporting(true);
+    const query = new URLSearchParams();
+    if (exportStartDate) query.append("startDate", exportStartDate);
+    if (exportEndDate) query.append("endDate", exportEndDate);
+
+    const url = `/api/admin/orders/export?${query.toString()}`;
+    // Setting window.location.href automatically prompts file download
+    window.location.href = url;
+    setTimeout(() => setIsExporting(false), 1000); // Reset button state after a second
   };
 
   const filteredOrders = orders.filter((order) => {
@@ -239,18 +302,46 @@ export default function AdminOrders({ searchQuery = "" }: AdminOrdersProps) {
         </Button>
       </div>
 
-      <div className="flex items-center gap-3 mb-4">
-        <label className="text-sm font-medium text-gray-700">
-          Sort by date:
-        </label>
-        <select
-          value={dateSort}
-          onChange={(e) => setDateSort(e.target.value as "newest" | "oldest")}
-          className="text-sm px-3 py-2 rounded border border-gray-300 bg-white"
-        >
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-        </select>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium text-gray-700">
+            Sort by date:
+          </label>
+          <select
+            value={dateSort}
+            onChange={(e) => setDateSort(e.target.value as "newest" | "oldest")}
+            className="text-sm px-3 py-2 rounded border border-gray-300 bg-white"
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-lg border border-gray-200">
+          <label className="text-sm font-semibold text-gray-700 ml-1">Export Orders:</label>
+          <input 
+            type="date" 
+            value={exportStartDate} 
+            onChange={(e) => setExportStartDate(e.target.value)} 
+            className="text-sm px-3 py-1.5 rounded border border-gray-300 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+          />
+          <span className="text-sm text-gray-500 font-medium">to</span>
+          <input 
+            type="date" 
+            value={exportEndDate} 
+            onChange={(e) => setExportEndDate(e.target.value)} 
+            className="text-sm px-3 py-1.5 rounded border border-gray-300 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+          />
+          <Button 
+            onClick={handleExportCsv}
+            disabled={isExporting}
+            variant="outline"
+            size="sm"
+            className="border-amber-600 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+          >
+            {isExporting ? "Exporting..." : "Download CSV"}
+          </Button>
+        </div>
       </div>
 
       {/* Filter Tabs */}
@@ -327,9 +418,31 @@ export default function AdminOrders({ searchQuery = "" }: AdminOrdersProps) {
         <div className="space-y-6">
           {groupedOrders.map((group) => (
             <div key={group.dateLabel} className="space-y-3">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-                {group.dateLabel}
-              </h3>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                  {group.dateLabel}
+                </h3>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                    onClick={() => handleBulkDeliveryUpdate(group.orders, "sent")}
+                    disabled={isBulkUpdating}
+                  >
+                    Mark Confirmed as Sent
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                    onClick={() => handleBulkDeliveryUpdate(group.orders, "received")}
+                    disabled={isBulkUpdating}
+                  >
+                    Mark Sent as Received
+                  </Button>
+                </div>
+              </div>
               <div className="space-y-4">
                 {group.orders.map((order) => (
                   <div

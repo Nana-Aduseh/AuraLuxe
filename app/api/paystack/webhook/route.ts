@@ -156,6 +156,22 @@ export async function POST(request: NextRequest) {
         console.error('Webhook: Order item insert error:', itemError)
         continue
       }
+
+      // Immediately deduct stock since the order is paid
+      if (item.color_id) {
+        const { data: colorData } = await supabase
+          .from('product_colors')
+          .select('stock_quantity')
+          .eq('id', item.color_id)
+          .maybeSingle()
+
+        if (colorData && typeof colorData.stock_quantity === 'number') {
+          await supabase
+            .from('product_colors')
+            .update({ stock_quantity: Math.max(0, colorData.stock_quantity - qty) })
+            .eq('id', item.color_id)
+        }
+      }
     }
 
     // Auto-claim logic for guest orders
