@@ -39,7 +39,6 @@ export default function AdminUsers({ searchQuery = "" }: AdminUsersProps) {
   const [users, setUsers] = useState<AdminManagedProfile[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [userOrders, setUserOrders] = useState<Map<string, UserOrder[]>>(
@@ -141,45 +140,6 @@ export default function AdminUsers({ searchQuery = "" }: AdminUsersProps) {
       return haystack.includes(query);
     });
   }, [searchQuery, users]);
-
-  const handleToggleAdmin = async (user: AdminManagedProfile) => {
-    setSavingId(user.id);
-    setError(null);
-
-    try {
-      const response = await fetch(`/api/admin/users/${user.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          isAdmin: !user.is_admin,
-        }),
-      });
-
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload.error || "Unable to update admin access");
-      }
-
-      setUsers((currentUsers) =>
-        currentUsers.map((currentUser) =>
-          currentUser.id === user.id
-            ? { ...currentUser, is_admin: !user.is_admin }
-            : currentUser,
-        ),
-      );
-    } catch (updateError) {
-      setError(
-        updateError instanceof Error
-          ? updateError.message
-          : "Unable to update admin access",
-      );
-    } finally {
-      setSavingId(null);
-    }
-  };
 
   const loadUserOrders = async (userId: string) => {
     if (userOrders.has(userId)) {
@@ -288,28 +248,7 @@ export default function AdminUsers({ searchQuery = "" }: AdminUsersProps) {
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  {!user.id.startsWith('guest-') ? (
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleAdmin(user);
-                      }}
-                      disabled={savingId === user.id || isCurrentUser}
-                      variant={user.is_admin ? "outline" : "default"}
-                      size="sm"
-                      className={
-                        user.is_admin
-                          ? ""
-                          : "bg-amber-600 hover:bg-amber-700 text-white"
-                      }
-                    >
-                      {savingId === user.id
-                        ? "Saving..."
-                        : user.is_admin
-                          ? "Remove Admin"
-                          : "Make Admin"}
-                    </Button>
-                  ) : (
+                  {user.id.startsWith('guest-') && (
                     <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">Guest</span>
                   )}
                   <span className="text-gray-400 text-lg">
