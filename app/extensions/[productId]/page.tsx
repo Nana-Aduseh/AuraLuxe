@@ -32,8 +32,8 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState<Product | null>(null)
   const [colors, setColors] = useState<ProductColor[]>([])
   const [quantities, setQuantities] = useState<ProductQuantity[]>([])
-  const [selectedQuantityId, setSelectedQuantityId] = useState<string | null>(null)
-  const [selectedColor, setSelectedColor] = useState('')
+  const [selectedQuantityId, setSelectedQuantityId] = useState<string | null>(null) // Initialize empty
+  const [selectedColor, setSelectedColor] = useState('') // Initialize empty
   const [quantity, setQuantity] = useState(1)
   const [displayImageUrl, setDisplayImageUrl] = useState('')
   const [loading, setLoading] = useState(true)
@@ -66,8 +66,10 @@ export default function ProductDetailPage() {
       setProduct(details.product)
       setColors(details.colors)
       setQuantities(details.quantities)
-      setSelectedColor(details.colors[0]?.id || '')
-      setDisplayImageUrl(details.colors[0]?.image_url || details.product.image_url || '')
+      // Set selectedColor and displayImageUrl AFTER details are loaded
+      const initialSelectedColorId = details.colors[0]?.id || '';
+      setSelectedColor(initialSelectedColorId);
+      setDisplayImageUrl(details.colors[0]?.image_url || details.product.image_url || '');
       setSelectedQuantityId(details.quantities[0]?.id || null)
       setLoading(false)
     }
