@@ -67,9 +67,7 @@ export default function ProductDetailPage() {
       setColors(details.colors)
       setQuantities(details.quantities)
       // Set selectedColor and displayImageUrl AFTER details are loaded
-      const initialSelectedColorId = details.colors[0]?.id || '';
-      setSelectedColor(initialSelectedColorId);
-      setDisplayImageUrl(details.colors[0]?.image_url || details.product.image_url || '');
+      setSelectedColor(details.colors[0]?.id || '');
       setSelectedQuantityId(details.quantities[0]?.id || null)
       setLoading(false)
     }
@@ -78,11 +76,19 @@ export default function ProductDetailPage() {
       loadProduct()
     }
   }, [productSlug, router])
-
+  
+  // This single, consolidated useEffect is now the source of truth for the display image.
+  // It will only run when the product and colors have been loaded.
   useEffect(() => {
-    const selectedColorData = colors.find((color) => color.id === selectedColor)
-    setDisplayImageUrl(selectedColorData?.image_url || product?.image_url || '')
-  }, [selectedColor, colors, product?.image_url])
+    if (product && colors.length > 0) {
+      const selectedColorData = colors.find((color) => color.id === selectedColor);
+      // Prioritize the selected color's image, then the first color's image, then the main product image.
+      setDisplayImageUrl(selectedColorData?.image_url || colors[0]?.image_url || product.image_url || '');
+    } else if (product) {
+      // Fallback for products with no color variants
+      setDisplayImageUrl(product.image_url || '');
+    }
+  }, [selectedColor, colors, product]);
 
   if (loading) {
     return (
