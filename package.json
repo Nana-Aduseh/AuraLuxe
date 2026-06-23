@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "next build && next-image-export-optimizer",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint ."
   },

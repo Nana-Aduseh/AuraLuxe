@@ -204,77 +204,21 @@ export default function ProductDetailPage() {
         </Link>
 
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] gap-8 items-start">
-          <div className="min-w-0 space-y-4">
-            <div className="bg-card rounded-3xl overflow-hidden border border-border/30 shadow-sm">
-              <div className="relative aspect-[4/4] bg-muted">
-                {displayImageUrl ? (
-                  <Image
-                    src={displayImageUrl}
-                    alt={selectedColorData?.color_name ? `${product.name} - ${selectedColorData.color_name}` : product.name}
-                    fill
-                    sizes="(max-width: 1024px) 100vw, 50vw"
-                    className="object-contain"
-                    priority
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-foreground/40">No image</div>
-                )}
-              </div>
-            </div>
-
-            <div className="lg:hidden bg-card rounded-3xl border border-border/30 shadow-sm p-4 sm:p-5">
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">Choose a color</p>
-                  <p className="text-xs text-foreground/60">Tap a picture to preview it above</p>
-                </div>
-                {selectedColorData && (
-                  <span className="text-xs font-medium rounded-full bg-amber-50 text-amber-700 px-3 py-1">
-                    {selectedColorData.color_name}
-                  </span>
-                )}
-              </div>
-              <div className="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {colors.map((color) => {
-                  const isSelected = selectedColor === color.id
-                  const colorSoldOut = (color.stock_quantity || 0) <= 0;
-
-                  return (
-                    <button
-                      key={color.id}
-                      type="button"
-                      onClick={() => setSelectedColor(color.id)}
-                      className={`min-w-[5.5rem] rounded-2xl border p-2 text-left transition-all ${isSelected ? 'border-amber-600 bg-amber-50 shadow-sm' : 'border-border/30 bg-background hover:border-amber-400/50'} ${colorSoldOut ? 'opacity-50' : ''}`}
-                      aria-pressed={isSelected}
-                      aria-label={`Select ${color.color_name}`}
-                    >
-                      <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-muted">
-                        {color.image_url ? (
-                          <Image
-                            src={color.image_url}
-                            alt={color.color_name}
-                            fill
-                            sizes="96px"
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center" style={{ backgroundColor: color.color_hex || '#ccc' }}>
-                            <span className="text-[10px] font-semibold text-white drop-shadow">
-                              {color.color_name.slice(0, 1)}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      <p className="mt-2 text-xs font-medium text-foreground line-clamp-2">
-                        {color.color_name}
-                      </p>
-                      {colorSoldOut && (
-                        <p className="mt-1 text-[10px] font-semibold text-red-500">Sold out</p>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
+          {/* Main Image Display */}
+          <div className="bg-card rounded-3xl overflow-hidden border border-border/30 shadow-sm">
+            <div className="relative aspect-[4/4] bg-muted">
+              {displayImageUrl ? (
+                <Image
+                  src={displayImageUrl}
+                  alt={selectedColorData?.color_name ? `${product.name} - ${selectedColorData.color_name}` : product.name}
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 50vw"
+                  className="object-contain"
+                  priority
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-foreground/40">No image</div>
+              )}
             </div>
           </div>
 
