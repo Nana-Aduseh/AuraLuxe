@@ -103,7 +103,7 @@ const CountdownTimer: React.FC<CountdownTimerProps> = ({ targetDate: targetDateS
           </h2>
           <div className="h-1.5 w-24 bg-primary mx-auto rounded-full" />
           <p className="text-muted-foreground text-lg md:text-2xl font-medium tracking-tight max-w-lg mx-auto leading-relaxed">
-            THE WAIT IS OVER! Your Favourite Hair Is Back in Stock!
+            The wait is over! Your Favourite Hair Is Back in Stock!
           </p>
         </div>
 
