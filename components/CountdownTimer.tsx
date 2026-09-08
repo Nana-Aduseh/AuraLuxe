@@ -99,11 +99,11 @@ const CountdownTimer: React.FC<CountdownTimerProps> = ({ targetDate: targetDateS
         {/* Announcement */}
         <div className="space-y-4">
           <h2 className="text-5xl md:text-8xl font-black text-primary tracking-tighter italic">
-            COMING SOON
+            RESTOCKING SOON
           </h2>
           <div className="h-1.5 w-24 bg-primary mx-auto rounded-full" />
           <p className="text-muted-foreground text-lg md:text-2xl font-medium tracking-tight max-w-lg mx-auto leading-relaxed">
-            Our luxury collection launch is just around the corner. Get ready to transform your look.
+            THE WAIT IS OVER! Your Favourite Hair Is Back in Stock!
           </p>
         </div>
 
@@ -132,7 +132,7 @@ const CountdownTimer: React.FC<CountdownTimerProps> = ({ targetDate: targetDateS
         {/* Official Start Time */}
         <div className="pt-12 space-y-6"> {/* Increased space-y for more separation */}
           <span className="px-5 py-2 rounded-full border border-primary/20 text-[10px] md:text-xs font-bold uppercase tracking-[0.25em] text-primary bg-primary/5">
-            Official Launch
+            Stay Tuned
           </span>
           <p className="text-lg md:text-2xl font-bold text-foreground/80 tracking-tight">
             {formattedDate}
