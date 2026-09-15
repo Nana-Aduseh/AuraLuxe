@@ -91,6 +91,17 @@ export async function GET(request: Request) {
       return `"${s}"` // Wrap string in quotes
     }
 
+    const escapePhoneCsv = (phone: string | null | undefined) => {
+      if (!phone) return '""'
+
+      const value = String(phone)
+      if (/^233\d{9}$/.test(value)) {
+        return `"=\"${value}\""`
+      }
+
+      return escapeCsv(value)
+    }
+
     for (const order of orders) {
       const profile = order.user_id ? profilesMap.get(order.user_id) : null;
       
@@ -102,7 +113,7 @@ export async function GET(request: Request) {
 
       csvRows.push([
         escapeCsv(order.total_amount), escapeCsv(customerName), escapeCsv(customerEmail), escapeCsv(order.payment_reference),
-        escapeCsv(order.completed_at), escapeCsv(order.guest_phone), escapeCsv(itemsText), escapeCsv(location)
+        escapeCsv(order.completed_at), escapePhoneCsv(order.guest_phone), escapeCsv(itemsText), escapeCsv(location)
       ].join(','))
     }
 

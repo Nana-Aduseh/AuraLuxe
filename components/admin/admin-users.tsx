@@ -244,6 +244,9 @@ export default function AdminUsers({ searchQuery = "" }: AdminUsersProps) {
                       <p className="text-sm text-gray-600">
                         {user.email || "No email"}
                       </p>
+                      <p className="text-sm text-gray-600">
+                        Mobile: {user.phone || "No mobile number"}
+                      </p>
                     </div>
                   </div>
                 </div>

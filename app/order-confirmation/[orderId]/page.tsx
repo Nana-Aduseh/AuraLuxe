@@ -25,6 +25,15 @@ export default function OrderConfirmationPage() {
 
   const orderId = params.orderId as string;
   const guestToken = searchParams.get("guestToken") || searchParams.get("token");
+  const extensionQuantity = orderItems.reduce(
+    (quantity, item) =>
+      quantity +
+      (item.product?.product_type === "extension"
+        ? item.quantity_ordered || 1
+        : 0),
+    0,
+  );
+  const hasExtensionBulkDiscount = extensionQuantity > 20;
 
   useEffect(() => {
     let cancelled = false;
@@ -272,7 +281,7 @@ export default function OrderConfirmationPage() {
           <div className="grid grid-cols-2 gap-4 text-sm border-b border-gray-300 pb-3">
             <div>
               <p className="text-gray-600 text-xs font-semibold">ORDER NUMBER</p>
-              <p className="font-bold text-gray-900 text-sm">{order.id.slice(0, 8).toUpperCase()}</p>
+              <p className="font-bold text-gray-900 text-sm break-all">{order.payment_reference || order.id}</p>
             </div>
             <div className="text-right">
               <p className="text-gray-600 text-xs font-semibold">DATE</p>
@@ -282,13 +291,14 @@ export default function OrderConfirmationPage() {
               <p className="text-gray-600 text-xs font-semibold">STATUS</p>
               <p className="font-bold text-green-600 capitalize text-sm">{order.status}</p>
             </div>
-            <div className="text-right">
-              <p className="text-gray-600 text-xs font-semibold">TOTAL</p>
-              <p className="font-bold text-amber-600 text-sm">{formatPrice(order.total_amount)}</p>
-            </div>
           </div>
 
           <div className="text-xs">
+            {hasExtensionBulkDiscount && (
+              <div className="mb-4 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+                Bulk discount applied: all extensions were priced at GHS 28 each for this order.
+              </div>
+            )}
             <p className="font-semibold text-gray-900 mb-2">ORDER ITEMS</p>
             <div className="space-y-1">
               {orderItems && orderItems.length > 0 ? (
@@ -352,8 +362,8 @@ export default function OrderConfirmationPage() {
           <ul className="space-y-1 text-blue-800 text-sm">
             {order.confirmation_status === "confirmed" ? (
               <>
-                <li>✓ Your order has been confirmed by the admin team</li>
-                <li>✓ A confirmation email has been sent</li>
+                <li>✓ Your order has been confirmed</li>
+                <li>✓ A confirmation sms has been sent</li>
               </>
             ) : (
               <>

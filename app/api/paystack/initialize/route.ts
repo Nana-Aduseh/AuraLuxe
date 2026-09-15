@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getPaystackCustomerTotal, getPaystackFee } from '@/lib/payment-fees'
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,8 +10,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields: email, amountGhs, reference' }, { status: 400 })
     }
 
+    const customerTotalGhs = getPaystackCustomerTotal(amountGhs)
+    const paystackFeeGhs = getPaystackFee(amountGhs)
     const actualCallbackUrl = callback_url || `${new URL(request.url).origin}/order-confirmation/${reference}`;
-    console.log('[Paystack/Initialize] Request:', { email, amountGhs, reference, callbackUrl: actualCallbackUrl });
+    const paymentMetadata = {
+      ...(metadata || {}),
+      total_amount: customerTotalGhs,
+      paystack_fee: paystackFeeGhs,
+      product_subtotal: amountGhs,
+    }
+    console.log('[Paystack/Initialize] Request:', { email, amountGhs, customerTotalGhs, paystackFeeGhs, reference, callbackUrl: actualCallbackUrl });
 
     const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
@@ -20,10 +29,10 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         email,
-        amount: Math.round(amountGhs * 100),
+        amount: Math.round(customerTotalGhs * 100),
         reference,
         callback_url: actualCallbackUrl,
-        metadata,
+        metadata: paymentMetadata,
         firstname,
         lastname,
         phone,

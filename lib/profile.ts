@@ -113,7 +113,7 @@ export async function listAdminManagedProfiles(supabase: SupabaseClient) {
       .from('profiles')
       .select(PROFILE_SELECT_BASIC)
 
-    data = fallback.data
+    data = fallback.data as typeof data
     error = fallback.error
   }
 

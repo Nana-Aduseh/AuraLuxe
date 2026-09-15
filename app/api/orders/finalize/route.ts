@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { verifyPaystackTransaction } from '@/lib/paystack'
 import { enrichOrderItemsForDisplay } from '@/lib/order-item-display'
+import { sendOrderConfirmationSms } from '@/lib/order-sms'
+import { decrementOrderItemStock } from '@/lib/order-stock'
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,6 +40,10 @@ export async function POST(request: NextRequest) {
 
     if (existingOrder) {
       console.log('[Finalize] ✅ Order already exists:', { orderId: existingOrder.id, confirmationStatus: existingOrder.confirmation_status });
+      if (existingOrder.confirmation_status === 'confirmed') {
+        await sendOrderConfirmationSms(supabase, existingOrder)
+      }
+
       // Order already exists, return it idempotently
       if (existingOrder.confirmation_status === 'confirmed') {
         const orderIds = existingOrders.map(o => o.id)
@@ -138,7 +144,7 @@ export async function POST(request: NextRequest) {
         user_id: metadata?.user_id || fallbackUserId || null,
         total_amount: totalAmount,
         status: forceFallback && fallbackStatus ? fallbackStatus : 'processing',
-        payment_reference: reference,
+        payment_reference: payData?.reference || reference,
         order_type: deliveryType === 'pickup' ? 'pickup' : 'delivery',
         confirmation_status: forceFallback && fallbackConfirmation ? fallbackConfirmation : 'confirmed',
         completed_at: payData?.paidAt || payData?.paid_at || payData?.transaction_date || payData?.createdAt || payData?.created_at || new Date().toISOString(),
@@ -182,6 +188,7 @@ export async function POST(request: NextRequest) {
       if (itemError) {
         console.error('Order item insert error:', itemError);
       } else {
+        await decrementOrderItemStock(supabase, item)
         console.log(`[Orders/Finalize] Order item added: product=${item.product_id}`);
       }
     }
@@ -202,6 +209,8 @@ export async function POST(request: NextRequest) {
         await supabase.from('orders').update({ user_id: profile.id }).eq('id', createdOrder.id)
       }
     }
+
+    await sendOrderConfirmationSms(supabase, createdOrder)
 
     console.log('[Finalize] ✅ Order finalized successfully:', {
       orderId: createdOrder.id,

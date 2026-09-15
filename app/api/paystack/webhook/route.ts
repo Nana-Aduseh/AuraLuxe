@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyPaystackWebhookSignature, verifyPaystackTransaction } from '@/lib/paystack'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { sendOrderConfirmationSms } from '@/lib/order-sms'
+import { decrementOrderItemStock } from '@/lib/order-stock'
 
 export async function POST(request: NextRequest) {
   try {
@@ -64,7 +66,8 @@ export async function POST(request: NextRequest) {
     
     // Use custom checkout_reference from metadata if available (sent from client)
     // Otherwise fallback to Paystack's reference
-    const paymentReference = metadata?.checkout_reference || reference
+    const paymentReference = reference
+    const checkoutReference = metadata?.checkout_reference || reference
     
     if (!paymentReference || status !== 'success') {
       console.log('[Webhook] Transaction not successful:', { reference, status });
@@ -85,11 +88,12 @@ export async function POST(request: NextRequest) {
     // ---------------------------------------------------------------------------------
     const { data: existingOrders } = await supabase
       .from('orders')
-      .select('id')
-      .eq('payment_reference', paymentReference)
+      .select('*')
+      .or(`payment_reference.eq.${paymentReference},payment_reference.eq.${checkoutReference}`)
       .limit(1)
 
     if (existingOrders && existingOrders.length > 0) {
+      await sendOrderConfirmationSms(supabase, existingOrders[0])
       console.log('[Webhook] ⏭️ Order already exists (likely created by /finalize route). Acknowledging webhook.');
       console.log('[Webhook] ==============================================');
       return NextResponse.json({ success: true, message: 'Order already exists' })
@@ -157,21 +161,7 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      // Immediately deduct stock since the order is paid
-      if (item.color_id) {
-        const { data: colorData } = await supabase
-          .from('product_colors')
-          .select('stock_quantity')
-          .eq('id', item.color_id)
-          .maybeSingle()
-
-        if (colorData && typeof colorData.stock_quantity === 'number') {
-          await supabase
-            .from('product_colors')
-            .update({ stock_quantity: Math.max(0, colorData.stock_quantity - qty) })
-            .eq('id', item.color_id)
-        }
-      }
+      await decrementOrderItemStock(supabase, item)
     }
 
     // Auto-claim logic for guest orders
@@ -186,6 +176,8 @@ export async function POST(request: NextRequest) {
         await supabase.from('orders').update({ user_id: profile.id }).eq('id', createdOrder.id)
       }
     }
+
+    await sendOrderConfirmationSms(supabase, createdOrder)
 
     console.log('[Webhook] ✅ Successfully processed fallback order:', paymentReference)
     console.log('[Webhook] ==============================================');

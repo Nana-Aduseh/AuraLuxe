@@ -259,7 +259,7 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            <div className="mb-6 hidden lg:block">
+            <div className="mb-6">
               <label className="block text-sm font-semibold text-foreground mb-3">Color</label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {colors.map((color) => {

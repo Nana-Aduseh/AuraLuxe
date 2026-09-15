@@ -7,9 +7,15 @@ import { Input } from "@/components/ui/input";
 import { formatPrice } from "@/lib/currency";
 import { ArrowLeft, AlertCircle } from "lucide-react";
 import Link from "next/link";
-import { getCart, CartItem, getEffectiveProductPrice } from "@/lib/api";
+import {
+  getCart,
+  CartItem,
+  getCheckoutExtensionQuantity,
+  getCheckoutUnitPrice,
+} from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { persistGuestOrderContext } from "@/lib/guest-orders";
+import { getPaystackCustomerTotal, getPaystackFee } from "@/lib/payment-fees";
 import WhatsAppButton from "@/components/whatsapp-button";
 import { PrePaystackModal } from "@/components/payment/pre-paystack-modal";
 import {
@@ -311,9 +317,10 @@ export default function CheckoutPage() {
     user,
   ]);
 
+  const extensionQuantity = getCheckoutExtensionQuantity(cartItems);
   const total = cartItems.reduce((sum, item) => {
     const product = item.product || {};
-    const price = getEffectiveProductPrice(item.product);
+    const price = getCheckoutUnitPrice(item, extensionQuantity);
     const quantity = item.quantity_ordered || 1;
     const itemTotal = price * quantity;
     
@@ -328,6 +335,8 @@ export default function CheckoutPage() {
     
     return sum + itemTotal;
   }, 0);
+  const paystackFee = getPaystackFee(total);
+  const customerTotal = getPaystackCustomerTotal(total);
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digitsOnly = e.target.value.replace(/\D/g, "");
@@ -399,7 +408,7 @@ export default function CheckoutPage() {
         color_id: item.color_id,
         quantity_id: item.quantity_id,
         quantity_ordered: item.quantity_ordered || 1,
-        price_at_purchase: getEffectiveProductPrice(item.product),
+        price_at_purchase: getCheckoutUnitPrice(item, extensionQuantity),
       }));
 
       // Capture delivery info for BOTH authenticated and guest users
@@ -464,7 +473,8 @@ export default function CheckoutPage() {
             delivery_type: deliveryType,
             guest_info: guestInfo,
             cart_items: serializedCartItems,
-            total_amount: total,
+            total_amount: customerTotal,
+            paystack_fee: paystackFee,
             order_mode: checkoutMode,
           },
         }),
@@ -893,12 +903,20 @@ export default function CheckoutPage() {
                   </div>
 
                   <div className="bg-gray-50 rounded p-4 border border-gray-200">
-                    <p className="text-sm text-gray-700 mb-2">
-                      <strong>Amount to Pay:</strong>
-                    </p>
-                    <p className="text-2xl font-bold text-amber-600">
-                      GHS {total.toFixed(2)}
-                    </p>
+                    <div className="space-y-2 text-sm text-gray-700">
+                      <div className="flex justify-between">
+                        <span>Subtotal</span>
+                        <span>{formatPrice(total)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Transaction fee</span>
+                        <span>{formatPrice(paystackFee)}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-gray-200 pt-2 text-base font-bold text-amber-600">
+                        <span>Amount to Pay</span>
+                        <span>{formatPrice(customerTotal)}</span>
+                      </div>
+                    </div>
                   </div>
 
                   <Button
@@ -941,7 +959,7 @@ export default function CheckoutPage() {
                             </span>
                             <span className="text-gray-900 font-medium block">
                               {formatPrice(
-                                getEffectiveProductPrice(item.product) *
+                                getCheckoutUnitPrice(item, extensionQuantity) *
                                   item.quantity_ordered,
                               )}
                             </span>
@@ -949,7 +967,7 @@ export default function CheckoutPage() {
                         ) : (
                           <span className="text-gray-900 font-medium">
                             {formatPrice(
-                              getEffectiveProductPrice(item.product) *
+                              getCheckoutUnitPrice(item, extensionQuantity) *
                                 item.quantity_ordered,
                             )}
                           </span>
@@ -976,6 +994,14 @@ export default function CheckoutPage() {
                   <span>Subtotal</span>
                   <span>{formatPrice(total)}</span>
                 </div>
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>Transaction fee</span>
+                  <span>{formatPrice(paystackFee)}</span>
+                </div>
+                <div className="flex justify-between font-semibold text-gray-900">
+                  <span>Amount to Pay:</span>
+                  <span>{formatPrice(customerTotal)}</span>
+                </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Delivery</span>
                   <span>To be determined</span>
@@ -985,7 +1011,7 @@ export default function CheckoutPage() {
               <div className="flex justify-between items-center">
                 <span className="font-semibold text-gray-900">Total</span>
                 <span className="text-2xl font-bold text-amber-600">
-                  {formatPrice(total)}
+                  {formatPrice(customerTotal)}
                 </span>
               </div>
             </div>

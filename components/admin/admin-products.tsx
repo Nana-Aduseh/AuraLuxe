@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatPrice } from "@/lib/currency";
-import { Product, ProductImage, getProductDetails } from "@/lib/api";
+import { Product, getProductDetails } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { Check, Edit2, Plus, Trash2, X } from "lucide-react";
 
@@ -443,6 +443,10 @@ export default function AdminProducts({
         }
 
         productId = data.id;
+      }
+
+      if (!productId) {
+        throw new Error("Unable to determine the product ID.");
       }
 
       let mainImageUrl = formData.image_url || "";

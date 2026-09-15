@@ -40,6 +40,34 @@ export function getEffectiveProductPrice(product?: Product | null) {
   return basePrice;
 }
 
+export const EXTENSION_BULK_QUANTITY = 20;
+export const EXTENSION_BULK_PRICE = 28;
+
+export function getCheckoutUnitPrice(
+  item: Pick<CartItem, "product" | "quantity_ordered">,
+  extensionQuantity: number,
+) {
+  if (
+    item.product?.product_type === "extension" &&
+    extensionQuantity > EXTENSION_BULK_QUANTITY
+  ) {
+    return EXTENSION_BULK_PRICE;
+  }
+
+  return getEffectiveProductPrice(item.product);
+}
+
+export function getCheckoutExtensionQuantity(items: CartItem[]) {
+  return items.reduce(
+    (quantity, item) =>
+      quantity +
+      (item.product?.product_type === "extension"
+        ? item.quantity_ordered || 1
+        : 0),
+    0,
+  );
+}
+
 export function slugifyProductName(name: string) {
   return name
     .toLowerCase()

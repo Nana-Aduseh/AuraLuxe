@@ -97,6 +97,14 @@ function LoginForm() {
                         {showPassword ? "🙈" : "👁️"}
                       </button>
                     </div>
+                    <div className="text-right text-sm">
+                      <Link
+                        href={`/auth/forgot-password${returnTo !== '/' ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`}
+                        className="underline underline-offset-4"
+                      >
+                        Forgot password?
+                      </Link>
+                    </div>
                   </div>
                   {error && <p className="text-sm text-red-500">{error}</p>}
                   <Button type="submit" className="w-full" disabled={isLoading}>

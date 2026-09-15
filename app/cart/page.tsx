@@ -10,8 +10,10 @@ import {
   removeFromCart,
   updateCartItemQuantity,
   CartItem,
+  Product,
   addToCart,
-  getEffectiveProductPrice,
+  getCheckoutExtensionQuantity,
+  getCheckoutUnitPrice,
 } from '@/lib/api'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -199,11 +201,13 @@ export default function CartPage() {
     window.dispatchEvent(new Event('aura-luxe-cart-updated'))
   }
 
-  const total = cartItems.reduce((sum, item) => {
-    return (
-      sum + getEffectiveProductPrice(item.product) * (item.quantity_ordered || 1)
-    );
-  }, 0)
+  const extensionQuantity = getCheckoutExtensionQuantity(cartItems)
+  const hasExtensionBulkDiscount = extensionQuantity > 20
+  const total = cartItems.reduce(
+    (sum, item) =>
+      sum + getCheckoutUnitPrice(item, extensionQuantity) * (item.quantity_ordered || 1),
+    0,
+  )
 
   const handleSignInToContinue = () => {
     window.sessionStorage.setItem('aura-luxe-checkout-return', '/checkout?mode=guest')
@@ -253,11 +257,20 @@ export default function CartPage() {
             <div className="lg:col-span-2">
               <div className="space-y-4">
                 {cartItems.map((item) => {
-                  const product = item.product || { id: '', name: '', price: 0, description: '' } as const
+                  const product: Product = item.product || {
+                    id: '',
+                    name: '',
+                    description: '',
+                    price: 0,
+                    image_url: null,
+                    is_trending: false,
+                    is_newest: false,
+                    created_at: '',
+                  }
                   const color = item.color || {}
                   const quantity = item.quantity || {}
                   
-                  const unitPrice = getEffectiveProductPrice(product as any)
+                  const unitPrice = getCheckoutUnitPrice(item, extensionQuantity)
                   const itemSubtotal = unitPrice * (item.quantity_ordered || 1)
                   const maxStock = (color as any)?.stock_quantity ?? 999
                   
@@ -367,6 +380,12 @@ export default function CartPage() {
                   Order Summary
                 </h2>
 
+                {hasExtensionBulkDiscount && (
+                  <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+                    Bulk discount applied: all extensions are GHS 28 each for this order.
+                  </div>
+                )}
+
                 {/* Items List */}
                 <div className="mb-6 pb-6 border-b border-border/20 max-h-64 overflow-y-auto">
                   <div className="space-y-2">
@@ -380,7 +399,7 @@ export default function CartPage() {
                             <span className="text-foreground/60"> ({(color as any)?.color_name})</span>
                           )}
                           <div className="text-xs text-foreground/60 mt-1">
-                            {item.quantity_ordered} × {formatPrice(getEffectiveProductPrice(product as any))} = <span className="font-semibold">{formatPrice(getEffectiveProductPrice(product as any) * (item.quantity_ordered || 1))}</span>
+                            {item.quantity_ordered} × {formatPrice(getCheckoutUnitPrice(item, extensionQuantity))} = <span className="font-semibold">{formatPrice(getCheckoutUnitPrice(item, extensionQuantity) * (item.quantity_ordered || 1))}</span>
                           </div>
                         </div>
                       )

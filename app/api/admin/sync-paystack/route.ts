@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { verifyPaystackTransaction } from '@/lib/paystack'
+import { decrementOrderItemStock } from '@/lib/order-stock'
 
 // Prevent Next.js from caching this route so it always fetches fresh data
 export const dynamic = 'force-dynamic'
@@ -50,8 +51,7 @@ export async function GET(request: Request) {
         try { metadata = JSON.parse(metadata) } catch (e) {}
       }
       
-      // Use custom checkout_reference from metadata if available (matches your webhook logic)
-      const paymentReference = metadata.checkout_reference || tx.reference
+      const paymentReference = tx.reference
       
       return { ...tx, parsedMetadata: metadata, paymentReference }
     })
@@ -185,21 +185,7 @@ export async function GET(request: Request) {
           continue
         }
         
-        // Immediately deduct stock since the order is paid
-        if (item.color_id) {
-          const { data: colorData } = await supabase
-            .from('product_colors')
-            .select('stock_quantity')
-            .eq('id', item.color_id)
-            .maybeSingle()
-
-          if (colorData && typeof colorData.stock_quantity === 'number') {
-            await supabase
-              .from('product_colors')
-              .update({ stock_quantity: Math.max(0, colorData.stock_quantity - qty) })
-              .eq('id', item.color_id)
-          }
-        }
+        await decrementOrderItemStock(supabase, item)
       }
       
       // Auto-claim logic for guest orders

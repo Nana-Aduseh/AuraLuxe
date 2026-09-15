@@ -26,6 +26,10 @@ interface OrderWithDetails {
   guest_region?: string | null;
   guest_first_name?: string | null;
   guest_last_name?: string | null;
+  sms_sent_at?: string | null;
+  sms_status?: string | null;
+  sms_message_id?: string | null;
+  sms_error?: string | null;
 }
 
 interface OrderItem {
@@ -571,6 +575,35 @@ export default function AdminOrders({ searchQuery = "" }: AdminOrdersProps) {
                                 ? "🚚 Delivery"
                                 : "📍 Pickup"}
                             </div>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Customer SMS
+                            </label>
+                            <div
+                              className={`w-full text-sm px-3 py-2 rounded border font-medium text-center ${
+                                order.sms_status === "sent"
+                                  ? "bg-green-100 border-green-300 text-green-700"
+                                  : order.sms_status === "failed"
+                                    ? "bg-red-100 border-red-300 text-red-700"
+                                    : "bg-yellow-100 border-yellow-300 text-yellow-700"
+                              }`}
+                            >
+                              {order.sms_status === "sent"
+                                ? `Sent${order.sms_sent_at ? ` ${format(new Date(order.sms_sent_at), "PPp")}` : ""}`
+                                : order.sms_status === "failed"
+                                  ? "Failed"
+                                  : order.sms_status === "not_configured"
+                                    ? "Not configured"
+                                    : order.sms_status === "invalid_phone"
+                                      ? "Invalid phone"
+                                      : order.guest_phone
+                                        ? "Pending"
+                                        : "No phone number"}
+                            </div>
+                            {order.sms_error && (
+                              <p className="mt-2 text-xs text-red-700">{order.sms_error}</p>
+                            )}
                           </div>
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
