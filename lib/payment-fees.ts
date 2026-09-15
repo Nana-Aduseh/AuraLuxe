@@ -1,4 +1,4 @@
-export const PAYSTACK_FEE_RATE = 0.0175
+export const PAYSTACK_FEE_RATE = 0.0195
 
 export function getPaystackCustomerTotal(amountGhs: number) {
   return Math.round(amountGhs * (1 + PAYSTACK_FEE_RATE) * 100) / 100
