@@ -14,7 +14,8 @@ export async function sendOrderConfirmationSms(
     return
   }
 
-  const message = 'Your order has been successfully placed. We will keep you updated on your delivery. Thank you!'
+  const customerName = order.guest_first_name || order.first_name || 'there'
+  const message = `Hi ${customerName}, your order has been received. We will keep you updated on your delivery.\nThank you!`
 
   try {
     const result = await sendTxtConnectSms(checkoutPhone, message)
